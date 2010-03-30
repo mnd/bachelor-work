@@ -73,9 +73,8 @@ BEGIN {
 }
 
 /{-[[:space:]]*REGISTER:/ {		# определение для функций вида:
-				# -- REGISTER: sum = Module.Name.func :: Integer -> Integer -> Integer
-				# TODO: заменить -- на {- … -} и при помощи readline собирать в одну строку
-				# TODO: добавить {- PREGISTER symbol | predicat a1 a3 an = module.name :: type -> type -> … -> type -}
+				# {- REGISTER: sum = Module.Name.func :: Integer -> Integer -> Integer -}
+				# {- PREGISTER symbol | predicat a1 a3 aN = module.name :: type -> type -> … -> type -}
 				# TODO: добавить регистрацию без явного указания типов, но с указанием количества аргументов. Также с предикатом и без
     
     #----------------Извлечение данных-----------------------------

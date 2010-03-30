@@ -43,6 +43,10 @@ beforeWord s = do { try (string s)
                   }
                <|> do { c <- anyChar
                       ; (case c of
+                            '\'' -> do{ s0 <- beforeWord "'"
+                                     ; s0' <- beforeWord s
+                                     ; return ((c:s0) ++ ('\'':s0'))
+                                     }
                             '(' -> do{ s1 <- beforeWord ")"
                                      ; s1' <- beforeWord s
                                      ; return ((c:s1) ++ (')':s1'))
