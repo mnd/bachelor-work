@@ -174,7 +174,7 @@ definition = do{ ftn <- wordList >>= return . typeNameParse
                }
 
 data When = Static String | Dynamic String
-
+          deriving Show
 -- Разбирает блок when
 whenDefinition :: Parser When
 whenDefinition = do{ try (string "when")
@@ -284,17 +284,22 @@ untypes ts fs = concatMap untypes' fs
       case lookup nt ts of
         Nothing -> untypesArgs func
         Just types -> concatMap (\t -> untypesArgs (((t, nn), as), w, b)) types
+
+    -- заменяет тип num-того аргумента функции func на newType
+    untNArg func@((n,as), w, b) newType num = let an = (snd $ as !! num)
+                                              in ((n, changeN as (newType, an) num), w, b)
     
     untypesArgs func@ ((_,as), _, _)   = untypesArgs' func (length as)
       where
         untypesArgs' func 0 = [func]
-        untypesArgs' func@ ((n,as), w, b) inum = let num = inum - 1
-                                                     at = fst (as !! num)
-                                                     an = snd (as !! num)
-                                                 in
-                                               case lookup at ts of
-                                                 Nothing -> untypesArgs' func num
-                                                 Just types -> concatMap (\t -> untypesArgs' ((n, (changeN as (t, an) num)), w, b) num) types
+        untypesArgs' func@ ((n,as), w, b) inum =
+          let num = inum - 1
+              at  = fst (as !! num)
+              an  = snd (as !! num)
+          in
+           case lookup at ts of
+             Nothing -> untypesArgs' func num
+             Just types -> concatMap (\t -> untypesArgs' (untNArg func t num) num) types
                                                  
 
 -- заменить Nтый элемент списка новым элементом
