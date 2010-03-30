@@ -36,8 +36,25 @@ wordList = do{ s1 <- word
             <|> return [s1]
           }
 
+-- Для считывания до конца строки. Предпологается, что мы уже прочитали открывающую двойную ковычку и ищем закрывающую
+quotedString :: Parser String
+quotedString = do{ char '\\'
+                 ; c1 <- anyChar
+                 ; s <- quotedString
+                 ; return ('\\':c1:s)
+                 }
+               <|> do { char '"'
+                      ; return ""
+                      }
+               <|> do { c2 <- anyChar
+                      ; s <- quotedString
+                      ; return (c2:s)
+                      }
 
--- считывает весь текст до строки "s". Всегда обрабатывает фигурные и круглые скобки как парные и s внутри них не ищет.
+-- считывает весь текст до строки "s". Всегда обрабатывает фигурные и круглые
+-- скобки как парные и s внутри них не ищет.
+-- Аналогично с одинарными и двойными ковычками
+beforeWord :: String -> Parser String
 beforeWord s = do { try (string s)
                   ; return ""
                   }
@@ -54,6 +71,10 @@ beforeWord s = do { try (string s)
                             '{' -> do{ s2 <- beforeWord "}"
                                      ; s2' <- beforeWord s
                                      ; return ((c:s2) ++ ('}':s2'))
+                                     }
+                            '"' -> do{ s2 <- quotedString
+                                     ; s2' <- beforeWord s
+                                     ; return ((c:s2) ++ ('"':s2'))
                                      }
                             _  -> do{ s3 <- beforeWord s
                                     ; return (c:s3)
