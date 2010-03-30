@@ -1,0 +1,38 @@
+module Dynamic
+       (
+         mul,
+         sub,
+         plus,
+       ) where
+
+import qualified Integer
+import qualified Complex
+%%
+
+plus (b1, b2);
+
+Integer.MyInt plus (Integer.MyInt b1, Integer.MyInt b2)
+{
+  Integer.plus b1 b2
+}
+Integer.MyInt mul (Integer.MyInt a1, Integer.MyInt a2)
+{
+  Integer.mul a1 a2
+}
+Integer.MyInt sub (Integer.MyInt a1, Integer.MyInt a2)
+{
+  Integer.sub a1 a2
+}
+
+Complex.Complex plus (Complex.Complex b1, Complex.Complex b2)
+{
+  Complex.plus b1 b2
+}
+Complex.Complex mul (Complex.Complex a1, Complex.Complex a2)
+{
+  Complex.mul a1 a2
+}
+Complex.Complex sub (Complex.Complex a1, Complex.Complex a2)
+{
+  Complex.sub a1 a2
+}
