@@ -304,8 +304,8 @@ untypes ts fs = concatMap untypes' fs
 
 -- заменить Nтый элемент списка новым элементом
 changeN :: [a] -> a -> Int -> [a]
-changeN (l:ls) t 0 = (t:ls)
-changeN (l:ls) t n = (l:(changeN ls t (n - 1)))
+changeN ls t n | 0 <= n && n < length ls = (take n ls) ++ [t] ++ (drop (n+1) ls)
+               | otherwise               = ls
 
 -- Извлечение данных из функции
 funTypeName :: Function -> (String, String)
@@ -325,40 +325,30 @@ whenDef (_, w, _) = w
 bodyDef :: (FunDef, When, String) -> String 
 bodyDef (_, _, b) = b
 
--- Фльтр. Возвращает два списка: Для всех элементов первого предикат истинен, для второго - ложен.
-safeFilter :: (a -> Bool) -> [a] -> ([a],[a])
-safeFilter _ [] = ([],[])
-safeFilter f (x:xs) = let (a,b) = safeFilter f xs
-                      in case f x of
-                        True  -> (x:a, b)
-                        False -> (a, x:b)
-                        
 genArgs :: String -> Int -> [String]
 genArgs s i = reverse $ genArgs' s i
   where
     genArgs' s 0 = []
-    genArgs' s i = (s ++ (show i)):(genArgs' s (i-1))
+    genArgs' s i = (s ++ (show i)) : (genArgs' s (i-1))
 
 genFun :: [Prototype] -> [Function] -> String
 genFun p funs@ (f:fs) = let defaultArgname = "someNeverUnuseableName"
-                            fname = (funName f)
-                            args =
+                            fname          = funName f
+                            nargs          = length $ funTypesArgs f
+                            args           = 
                               case lookup fname p of
-                                Nothing -> genArgs defaultArgname (length $ funTypesArgs f)
+                                Nothing -> genArgs defaultArgname nargs
                                 Just al -> al
-                            header  = fname ++ " :: " ++ concat (take (length $ funTypesArgs f) (cycle ["Dynamic -> "])) ++ "Maybe Dynamic\n"
-                                      ++ fname ++ " " ++ unwords args
-                            testAndBody = unlines $ map ((take 8 (repeat ' ')) ++) (genTestAndBody args funs)
+                            header         =  fname ++ " :: " ++ concat (take nargs (cycle ["Dynamic -> "])) ++ "Maybe Dynamic\n"
+                                              ++ fname ++ " " ++ unwords args
+                                              
+                            testAndBody    =  unlines $ map ((take 8 (repeat ' ')) ++) (genTestAndBody args funs)
                         in header ++ "\n" ++ testAndBody
 
 genTestAndBody :: [String] -> [Function] -> [String]
-genTestAndBody _ []        = ["| otherwise = Nothing"]
-genTestAndBody args (f:fs) = let s = "| " ++ (join " && " (genTests args f)) ++ " && " ++ (genWhen args f) ++ " = " ++ (genBody args f)
-                             in (s:(genTestAndBody args fs))
-
-join :: String -> [String] -> String
-join j (s:[]) = s
-join j (s:s1:xs) = s ++ j ++ (join j (s1:xs))
+genTestAndBody _ []        = ["| otherwise = Nothing"] -- Ветка создается на случай если обработка не реализована
+genTestAndBody args (f:fs) = let s = "| " ++ (intercalate " && " (genTests args f)) ++ " && " ++ (genWhen args f) ++ " = " ++ (genBody args f)
+                             in s : (genTestAndBody args fs)
 
 genTests :: [String] -> Function -> [String]
 genTests args f = genTests' $ zip args (funTypesArgs f)
@@ -366,7 +356,7 @@ genTests args f = genTests' $ zip args (funTypesArgs f)
     genTests' :: [(String, (String, String))] {- [(Name, (Type, InnerName))] -} -> [String]
     genTests' [] = []
     genTests' (d:ds) = let test = "((dynTypeRep " ++ (fst d) ++ ") == (typeOf (undefined :: " ++ (fst $ snd d) ++ ")))"
-                       in (test:(genTests' ds))
+                       in test : (genTests' ds)
 
 -- Извлекает аргументы из динамиков. Получает список [(Name, (Type, InnerName))]
 genExtactArgs ::  [(String, (String, String))] {- [(Name, (Type, InnerName))] -} -> String
@@ -385,21 +375,16 @@ genWhen args f = "((" ++ (genExtactArgs $ extractingArgs when) ++ "return (" ++ 
     extractingArgs (Dynamic _) = filter shadowArgs (zip args fargs)
       where
         shadowArgs (ext, (_, int)) = ext /= int
+
 genBody :: [String] -> Function -> String
-genBody args f = "(" ++ (genExtactArgs $ zip args (funTypesArgs f)) ++ "return $ toDyn " {- ++ toDyn -}
+genBody args f = "(" ++ (genExtactArgs $ zip args (funTypesArgs f)) ++ "return $ toDyn "
                  ++ "((" ++ (bodyDef f) ++ ") :: " ++ (funType f) ++ "))"
-  -- where
-  --   toDyn =
-  --     case funType f of
-  --       "Dynamic" -> ""
-  --       _         -> "$ toDyn"
 
 genFunctions :: [Prototype] -> [Function] -> [String]
 genFunctions _ [] = []
 genFunctions p funs@ (f:fs) = let name = funName f
-                                  (fdefs, others) = safeFilter (((==) name) . funName) funs
+                                  (fdefs, others) = partition (((==) name) . funName) funs
                               in ((genFun p fdefs):(genFunctions p others))
-
 
 
 --------------------- Обработка закончилась. Использование: runFile code "dynamic.gen" >>= return . generate --------------------------------
