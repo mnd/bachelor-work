@@ -273,7 +273,7 @@ generate (s, t, p, f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ gen
     f' = untypes t f
     
 -- Модули которые нужны всегда
-restrictedModules = unlines ["import Data.Typeable", "import Data.Dynamic", "import Data.Maybe"]
+restrictedModules = unlines ["import Data.Typeable", "import Data.Dynamic", "import Data.Maybe", "import Monad"]
 
 -- Извлечь типы определенные через typedef
 untypes :: [Typedef] -> [Function] -> [Function]
@@ -352,7 +352,7 @@ genFun p funs@ (f:fs) = let defaultArgname = "someNeverUnuseableName"
                         in header ++ "\n" ++ testAndBody
 
 genTestAndBody :: [String] -> [Function] -> [String]
-genTestAndBody _ []        = []
+genTestAndBody _ []        = ["| otherwise = Nothing"]
 genTestAndBody args (f:fs) = let s = "| " ++ (join " && " (genTests args f)) ++ " && " ++ (genWhen args f) ++ " = " ++ (genBody args f)
                              in (s:(genTestAndBody args fs))
 
