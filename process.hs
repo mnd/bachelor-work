@@ -268,7 +268,7 @@ code = do{ many sn
 
 -- Генерация кода
 generate :: Program -> String
-generate (s, t, p, f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions p f')
+generate (s, t, p, f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions p f') ++ "\n" ++ (genSymbolTable f)
   where
     f' = untypes t f
     
@@ -386,6 +386,11 @@ genFunctions p funs@ (f:fs) = let name = funName f
                                   (fdefs, others) = partition (((==) name) . funName) funs
                               in ((genFun p fdefs):(genFunctions p others))
 
+genSymbolTable :: [Function] -> String
+genSymbolTable fs = let fnames = nub $ map funName fs
+                        fnt = zipWith (\a b -> "(" ++ (show a) ++ ", " ++ b ++ ")") fnames fnames
+                    in  "data TypeableType = forall a. Typeable a => T a" ++ "\n"
+                        ++ "symbolTable :: [(String, TypeableType)] " ++ "\n" ++ "symbolTable = [" ++ (intercalate ", T " fnt) ++ "]"
 
 --------------------- Обработка закончилась. Использование: runFile code "dynamic.gen" >>= return . generate --------------------------------
 --------------------------------------------- то есть функции "generate" отдавать вывод парсера "code" --------------------------------------

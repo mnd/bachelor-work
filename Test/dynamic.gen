@@ -3,6 +3,7 @@ module Dynamic
          mul,
          sub,
          plus,
+	 symbolTable
        ) where
 
 import qualified Integer
