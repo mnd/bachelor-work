@@ -64,10 +64,10 @@ apply' :: (Typeable f, Typeable a, Typeable b) => f -> [a] -> Maybe b
 apply' f as = dynamicApply (toDyn f) (map toDyn as) >>= fromDynamic
 
 apply :: Function -> [Dynamic] -> Maybe Dynamic
-apply f as | length as == 1 = apply' (unF1 f) as >>= id
-           | length as == 2 = apply' (unF2 f) as >>= id
-           | length as == 3 = apply' (unF3 f) as >>= id
-           | length as == 4 = apply' (unF4 f) as >>= id
+apply f as | length as == 1 = join $ apply' (unF1 f) as
+           | length as == 2 = join $ apply' (unF2 f) as
+           | length as == 3 = join $ apply' (unF3 f) as
+           | length as == 4 = join $ apply' (unF4 f) as
                          
 
 readArg :: String -> Dynamic
