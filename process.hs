@@ -84,7 +84,7 @@ beforeWord s = do { try (string s)
 -- "import haskell code SPACES ;" -> import haskell code
 import1 :: Parser String
 import1 = do{ try (string "import")
-            ; s <- beforeWord ";" >>= return . trimTail
+            ; s <- fmap trimTail (beforeWord ";")
             ; return ("import" ++ s)
             }
           
@@ -97,7 +97,7 @@ module1 = do{ try (string "module")
 
 -- Список слов через запятую. Используется для разбора списка типов внутри "[" "]"
 list :: Parser [String]
-list = do{ t <- wordList >>= return . unwords
+list = do{ t <- fmap unwords wordList
              ; many sn
              ; do{ char ','
                  ; many sn
@@ -152,7 +152,7 @@ typeNameParse x = (unwords (init x), last x)
 
 -- Разбирает аргументы функции, почти идентично правилу list, только слегка иначе обрабатывается 
 funArgs :: Parser [TypeName]
-funArgs = do{ a <- wordList >>= return . typeNameParse
+funArgs = do{ a <- fmap typeNameParse wordList
             ; do{ char ','
                 ; many sn
                 ; as <- funArgs
@@ -163,7 +163,7 @@ funArgs = do{ a <- wordList >>= return . typeNameParse
 
 -- Разбирает определение функции "Type name (types with args)"
 definition :: Parser FunDef
-definition = do{ ftn <- wordList >>= return . typeNameParse
+definition = do{ ftn <- fmap typeNameParse wordList
                ; many sn
                ; char '('
                ; many sn
@@ -180,12 +180,12 @@ whenDefinition :: Parser When
 whenDefinition = do{ try (string "when")
                    ; many sn
                    ; do{ char '{'
-                       ; pred <- beforeWord "}" >>= return . Static . trim
+                       ; pred <- fmap (Static . trim) (beforeWord "}")
                        ; return pred
                        }
                      <|>
                      do{ char '('
-                       ; pred <- beforeWord ")" >>= return . Dynamic . trim
+                       ; pred <- fmap (Dynamic . trim) (beforeWord ")")
                        ; return pred
                        }
                    }
@@ -193,7 +193,7 @@ whenDefinition = do{ try (string "when")
 -- разбирает тело функции
 bodyDefinition :: Parser String
 bodyDefinition = do { char '{'
-                    ; body <- beforeWord "}" >>= return . trim
+                    ; body <- fmap trim (beforeWord "}")
                     ; return body
                     }
 
