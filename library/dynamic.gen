@@ -1,0 +1,25 @@
+module Simple (
+       symbolTable,
+       readTable,
+       showTable
+       ) where
+
+%%
+
+Integer plus (Integer a, Integer b)
+Double plus (Double a, Double b)
+{
+  a + b
+}
+
+Integer sub (Integer a, Integer b)
+Double sub (Double a, Double b)
+{
+  a - b
+}
+
+
+typedef readTypes = [Integer, Double];
+
+readTypes read (String s) { read s }
+String show (readTypes a) { show a }

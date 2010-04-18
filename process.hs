@@ -72,6 +72,10 @@ beforeWord s = do { try (string s)
                                      ; s2' <- beforeWord s
                                      ; return ((c:s2) ++ ('}':s2'))
                                      }
+                            '[' -> do{ s2 <- beforeWord "]"
+                                     ; s2' <- beforeWord s
+                                     ; return ((c:s2) ++ (']':s2'))
+                                     }
                             '"' -> do{ s2 <- quotedString
                                      ; s2' <- beforeWord s
                                      ; return ((c:s2) ++ ('"':s2'))
@@ -268,9 +272,12 @@ code = do{ many sn
 
 -- Генерация кода
 generate :: Program -> String
-generate (s, t, p, f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions p f') ++ "\n" ++ (genSymbolTable f)
+generate (s, t, p, f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions p f')
+                        ++ "\n" ++ (genSymbolTable f) ++ "\n" ++ (genRead fr) ++ "\n" ++ (genShow fs)
   where
-    f' = untypes t f
+    f1 = untypes t f
+    (fr, f2) = partition (((==) "read") . funName) f1
+    (fs, f') = partition (((==) "show") . funName) f2
     
 -- Модули которые нужны всегда
 restrictedModules = unlines ["import Data.Typeable", "import Data.Dynamic", "import Data.Maybe", "import Monad"]
@@ -332,22 +339,38 @@ genArgs s i = reverse $ genArgs' s i
     genArgs' s i = (s ++ (show i)) : (genArgs' s (i-1))
 
 genFun :: [Prototype] -> [Function] -> String
-genFun p funs@ (f:fs) = let defaultArgname = "someNeverUnuseableName"
+genFun p funs@ (f:fs) = let defaultArgName = "someNeverUnuseableName"
                             fname          = funName f
                             nargs          = length $ funTypesArgs f
-                            args           = 
-                              case lookup fname p of
-                                Nothing -> genArgs defaultArgname nargs
-                                Just al -> al
-                            header         =  fname ++ " :: " ++ concat (take nargs (cycle ["Dynamic -> "])) ++ "Maybe Dynamic\n"
-                                              ++ fname ++ " " ++ unwords args
-                                              
-                            testAndBody    =  unlines $ map ((take 8 (repeat ' ')) ++) (genTestAndBody args funs)
-                        in header ++ "\n" ++ testAndBody
+                            args           = case lookup fname p of
+                              Nothing -> genArgs defaultArgName nargs
+                              Just al -> al
+                            header         = fname ++ " :: [Dynamic] -> Maybe Dynamic\n"
+                                             ++ fname ++ " [" ++ (intercalate ", " args) ++ "]"
+                            testAndBody    = unlines $ map ((take 8 (repeat ' ')) ++) (genTestAndBody args funs)
+                            defaultWay     = fname ++ " _ = Nothing"
+                        in header ++ "\n" ++ testAndBody ++ "\n" ++ defaultWay
+
+genRead :: [Function] -> String
+genRead fs = let as   = map (snd . head . funTypesArgs) fs
+                 bs   = map bodyDef fs
+                 ts   = map funType fs
+                 defs = zipWith3 (\a b t -> "(" ++ (show t) ++ ", (\\" ++ a ++ " -> toDyn ((" ++ b ++ ") :: (" ++ t ++ "))))") as bs ts
+               in "readTable :: [(String, (String -> Dynamic))]\n" ++ "readTable = [" ++ (intercalate ", " defs) ++ "]"
+
+genShow :: [Function] -> String
+genShow fs = let an = "someNeverUnuseableName"
+                 tas  = map (head . funTypesArgs) fs
+                 bs   = map bodyDef fs
+                 defs = zipWith (\(t, a) b -> "((typeOf (undefined :: (" ++ t ++ "))), (\\" ++ an
+                                              ++ " -> ((fromDynamic (" ++ an ++ ") :: (Maybe (" ++ t ++ "))) >>= \\" ++ a
+                                              ++ " -> return (\"((\" ++ (" ++ b ++ ") ++ \") : " ++ t ++ ")\"))))") tas bs
+             in "showTable :: [(TypeRep, (Dynamic -> Maybe String))]\n" ++ "showTable = [" ++ (intercalate ", " defs) ++ "]"
 
 genTestAndBody :: [String] -> [Function] -> [String]
-genTestAndBody _ []        = ["| otherwise = Nothing"] -- Ветка создается на случай если обработка не реализована
-genTestAndBody args (f:fs) = let s = "| " ++ (intercalate " && " (genTests args f)) ++ " && " ++ (genWhen args f) ++ " = " ++ (genBody args f)
+genTestAndBody _ []        = [] -- Ветка создается на случай если обработка не реализована
+genTestAndBody args (f:fs) = let s = "| " ++ (intercalate " && " (genTests args f))
+                                     ++ " && " ++ (genWhen args f) ++ " = " ++ (genBody args f)
                              in s : (genTestAndBody args fs)
 
 genTests :: [String] -> Function -> [String]
@@ -361,11 +384,13 @@ genTests args f = genTests' $ zip args (funTypesArgs f)
 -- Извлекает аргументы из динамиков. Получает список [(Name, (Type, InnerName))]
 genExtactArgs ::  [(String, (String, String))] {- [(Name, (Type, InnerName))] -} -> String
 genExtactArgs [] = []
-genExtactArgs (d:ds) = "((fromDynamic " ++ (fst d) ++ ") :: Maybe " ++ (fst $ snd d) ++ ") >>= \\" ++ (snd $ snd d) ++ " -> " ++ (genExtactArgs ds)
+genExtactArgs (d:ds) = "((fromDynamic " ++ (fst d) ++ ") :: Maybe " ++ (fst $ snd d) ++ ")"
+                       ++ " >>= \\" ++ (snd $ snd d) ++ " -> " ++ (genExtactArgs ds)
 
 
 genWhen :: [String] -> Function -> String
-genWhen args f = "((" ++ (genExtactArgs $ extractingArgs when) ++ "return (" ++ (genWhen' when) ++")) == Just True)"
+genWhen args f = "((" ++ (genExtactArgs $ extractingArgs when)
+                 ++ "return (" ++ (genWhen' when) ++")) == Just True)"
   where
     when = whenDef f
     fargs = funTypesArgs f
@@ -380,17 +405,27 @@ genBody :: [String] -> Function -> String
 genBody args f = "(" ++ (genExtactArgs $ zip args (funTypesArgs f)) ++ "return $ toDyn "
                  ++ "((" ++ (bodyDef f) ++ ") :: " ++ (funType f) ++ "))"
 
+-- Генерирует набор функций по прототипам и структурам описывающим их. Код не красив. Стоит переписать.
 genFunctions :: [Prototype] -> [Function] -> [String]
 genFunctions _ [] = []
-genFunctions p funs@ (f:fs) = let name = funName f
-                                  (fdefs, others) = partition (((==) name) . funName) funs
-                              in ((genFun p fdefs):(genFunctions p others))
-
+genFunctions ps funs@ (f:fs) =
+  let name = funName f
+      (fdefs, others) = partition (((==) name) . funName) funs
+  in if name `notElem` registredNames then 
+       (genFun ps fdefs) : (genFunctions ps others)
+     else
+       genFunctions ps others
+   
+   
 genSymbolTable :: [Function] -> String
-genSymbolTable fs = let fnames = nub $ map funName fs
-                        fnt = zipWith (\a b -> "(" ++ (show a) ++ ", " ++ b ++ ")") fnames fnames
-                    in  "data TypeableType = forall a. Typeable a => T a" ++ "\n"
-                        ++ "symbolTable :: [(String, TypeableType)] " ++ "\n" ++ "symbolTable = [" ++ (intercalate ", T " fnt) ++ "]"
+genSymbolTable funs = let fs = filter ((flip notElem registredNames) . funName) funs
+                          fnames = nub $ map funName fs
+                          fnt = map (\a -> "(" ++ (show a) ++ ", " ++ a ++ ")") fnames
+                      in  "symbolTable :: [(String, ([Dynamic] -> Maybe Dynamic))]"
+                          ++ "\n" ++ "symbolTable = [" ++ (intercalate ", " fnt) ++ "]"
+
+registredNames :: [String]
+registredNames = ["read", "show", "symbolTable", "readTable"]
 
 --------------------- Обработка закончилась. Использование: runFile code "dynamic.gen" >>= return . generate --------------------------------
 --------------------------------------------- то есть функции "generate" отдавать вывод парсера "code" --------------------------------------
@@ -470,5 +505,19 @@ main = do
 "typedef", определение функции будет развернуто в ряд определений, в
 каждом из которых вместо "name" будет подставлен один из типов
 указаных в списке в правой части "typedef"
+
+Функции с именами symbolTable и readTable игнорируются. 
+
+Функции с именем read (к сожалению без ряда проверок) интерпретируются
+как функции
+> Type read (String arg) { Body }
+То есть блок when игнорируется, все аргументы кроме первого
+игнорируются, тип аргумента игнорируется и считается типом String. 
+
+Функции read генерируют структуру readTable вида 
+> readTable = [("Type", \arg -> toDyn ((Body) :: Type)), … ]
+Которая используется для считывания считывания строки.
+
+Добавлена showTable аналогичная readTalbe. Целесообразность сомнительна, так что возможно стоит её удалить.
 
 -}

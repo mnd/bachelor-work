@@ -5,10 +5,10 @@ import qualified Complex
 
 main = do
   let printRes = putStrLn . show . myShow
-  printRes $ plus (toDyn (Integer.MyInt 2)) (toDyn (Integer.MyInt 4))
-  printRes $ sub (toDyn (Integer.MyInt 2)) (toDyn (Integer.MyInt 4))
-  printRes $ plus (toDyn (Complex.Complex 2 5)) (toDyn (Complex.Complex 1 4))
-  printRes $ sub (toDyn (Complex.Complex 2 1)) (toDyn (Complex.Complex 0 4))
+  printRes $ plus [(toDyn (Integer.MyInt 2)), (toDyn (Integer.MyInt 4))]
+  printRes $ sub [(toDyn (Integer.MyInt 2)), (toDyn (Integer.MyInt 4))]
+  printRes $ plus [(toDyn (Complex.Complex (2, 5))), (toDyn (Complex.Complex (1, 4)))]
+  printRes $ sub [(toDyn (Complex.Complex (2, 1))), (toDyn (Complex.Complex (0, 4)))]
   
   
 myShow :: Maybe Dynamic -> Maybe String

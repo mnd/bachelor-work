@@ -3,7 +3,8 @@ module Dynamic
          mul,
          sub,
          plus,
-	 symbolTable
+         symbolTable,
+         readTable
        ) where
 
 import qualified Integer
@@ -24,6 +25,10 @@ Integer.MyInt sub (Integer.MyInt a1, Integer.MyInt a2)
 {
   Integer.sub a1 a2
 }
+
+Integer.MyInt read (String a) { Integer.MyInt $ (read a) }
+Complex.Complex read (String a) { Complex.Complex $ (read a) }
+
 
 Complex.Complex plus (Complex.Complex b1, Complex.Complex b2)
 {
