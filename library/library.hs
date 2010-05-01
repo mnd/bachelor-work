@@ -1,14 +1,37 @@
 module DynamicFace (
   module Data.Dynamic,
-  dplus,
-  slplus,
-  rlplus,
-  getFun,
-  getRead,
-  getShow,
-  parseString,
-  argToDyn,
-  eval
+  -- ([Dynamic] -> Maybe Dynamic) -> ([Dynamic] -> Maybe Dynamic) -> [Dynamic] -> Maybe Dynamic
+  dplus,                        -- Join two dynamic functions
+
+  -- [(String, ([Dynamic] -> Maybe Dynamic))] -> [(String, ([Dynamic] -> Maybe Dynamic))] -> [(String, ([Dynamic] -> Maybe Dynamic))]
+  slplus,                       -- Join two symbol table
+
+  -- [(String, (String -> Dynamic))] -> [(String, (String -> Dynamic))] -> [(String, (String -> Dynamic))]
+  rlplus,                       -- Join two read table
+  
+  -- [(TypeRep, (Dynamic -> Maybe String))] -> [(TypeRep, (Dynamic -> Maybe String))] -> [(TypeRep, (Dynamic -> Maybe String))]
+  shlplus,                      -- Join two show table
+  
+  -- [(String, ([Dynamic] -> Maybe Dynamic))] -> String -> Maybe ([Dynamic] -> Maybe Dynamic)
+  getFun,                       -- Get function from symbol table by name
+  
+  -- [(String, (String -> Dynamic))] -> String -> Maybe (String -> Dynamic)
+  getRead, -- Get read function from read table by type name
+
+  -- [(TypeRep, (Dynamic -> Maybe String))] -> Dynamic -> Maybe String
+  getShow,                      -- Get String representation of variable from show table
+
+  -- String -> Maybe (String, [(String, String)])
+  parseString,                  -- Get (functionName, [(ArgRepr, ArgType)]) representation from string
+  
+  -- [(String, (String -> Dynamic))] -> (String, String) -> Maybe Dynamic
+  argToDyn,                     -- Get dynamic argument from read table by (ArgRepr, ArgType) tuple
+  
+  -- [(String, ([Dynamic] -> Maybe Dynamic))] -- symbolList
+  -- -> [(String, (String -> Dynamic))] -- typeList
+  -- -> (String, [(String, String)]) -- (fun, argList)
+  -- -> Maybe Dynamic
+  eval                          -- Get result of eval of (functionName, [(ArgRepr, ArgType)]) by symbol table and read table
   ) where
 
 import Monad
@@ -35,9 +58,14 @@ slplus as bs = map slplus' ns
 rlplus :: [(String, (String -> Dynamic))] -> [(String, (String -> Dynamic))] -> [(String, (String -> Dynamic))]
 rlplus = (++)
 
+-- Объединяет два списка типов выводимых
+shlplus :: [(TypeRep, (Dynamic -> Maybe String))] -> [(TypeRep, (Dynamic -> Maybe String))] -> [(TypeRep, (Dynamic -> Maybe String))]
+shlplus = (++)
+
+
 -- По имени функции и таблице символов возвращает функцию
-getFun :: String -> [(String, ([Dynamic] -> Maybe Dynamic))] -> Maybe ([Dynamic] -> Maybe Dynamic)
-getFun = lookup
+getFun :: [(String, ([Dynamic] -> Maybe Dynamic))] -> String -> Maybe ([Dynamic] -> Maybe Dynamic)
+getFun = flip lookup
 
 getShow :: [(TypeRep, (Dynamic -> Maybe String))] -> Dynamic -> Maybe String
 getShow sl a = case lookup (dynTypeRep a) sl of
@@ -45,10 +73,10 @@ getShow sl a = case lookup (dynTypeRep a) sl of
   Nothing -> Nothing
 
 -- По имени типа и списку типов возвращает функцию чтения
-getRead :: String -> [(String, (String -> Dynamic))] -> Maybe (String -> Dynamic)
-getRead = lookup
+getRead :: [(String, (String -> Dynamic))] -> String -> Maybe (String -> Dynamic)
+getRead = flip lookup
 
----------------------------- Скопировано из ../process.hs возможно стоит оформить как-то отдельной библиотекой -----------
+---------------------------- Скопировано из ../process.hs явно стоит оформить как-то отдельной библиотекой -----------
 
 spaceSymbol :: Char -> Bool
 spaceSymbol ' '  = True
@@ -162,19 +190,24 @@ run p input =
 parseString :: String -> Maybe (String, [(String, String)])
 parseString = run function
 
-argToDyn :: (String, String) -> [(String, (String -> Dynamic))]
-            -> Maybe Dynamic
-argToDyn (r, t) tl = ap (getRead t tl) (Just r)
+argToDyn :: [(String, (String -> Dynamic))] -> (String, String) -> Maybe Dynamic
+argToDyn tl (r, t) = ap (getRead tl t) (Just r)
 
 -- По списку разобранной функции, списку символов
 -- и списку типов вычисляет результат
-eval :: (String, [(String, String)]) -- (fun, argList)
-        -> [(String, ([Dynamic] -> Maybe Dynamic))] -- symbolList
+eval :: [(String, ([Dynamic] -> Maybe Dynamic))] -- symbolList
         -> [(String, (String -> Dynamic))] -- typeList
+        -> (String, [(String, String)]) -- (fun, argList)
         -> Maybe Dynamic
 
-eval (f, al) sl tl = do
-  fun  <- getFun f sl
-  args <- sequence $ map (flip argToDyn tl) al
+eval sl tl (f, al) = do
+  fun  <- getFun sl f
+  args <- sequence $ map (argToDyn tl) al
   fun args
 
+
+-- Вопрос дня: Делать явную функцию, которая получает ряд сущностей
+-- (таблицу символов, таблицу чтения, таблицу вывода, таблицу модлей, таблицу переменных)
+-- или завернуть эти сущности в монаду состояния?
+
+-- Надо написать функцию реализующую цикл чтения, выполнения, вывода.

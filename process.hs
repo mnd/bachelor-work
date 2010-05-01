@@ -130,24 +130,6 @@ typedef = do{ try (string "typedef")
             ; return (name, tl)
             }
 
--- Определим прототип функции. Будет использовать для выставления имён переменных
-type Prototype = (String, [String]) -- (name, [args])
-
-prototype :: Parser Prototype
-prototype = do{ name1 <- try (do{ name <- word
-                                ; many sn
-                                ; char '('
-                                ; return name
-                                })
-              ; many sn
-              ; args <- list
-              ; many sn
-              ; char ')'
-              ; many sn
-              ; char ';'
-              ; return (name1, args)
-              }
-            
             
 type TypeName = (String, String)
 --  Вспомогательная функция. Преобразует список слов в пару тип и имя. Например ["Maybe", "Bool", "name"] в ("Maybe Bool", "name")
@@ -229,39 +211,37 @@ function = do{ def <- definition
            where
              emptyWhen = Static "True"
 
-type Program = (String {- modules + imports -}, [Typedef], [Prototype], [Function])
+type Program = (String {- modules + imports -}, [Typedef],[Function])
 
 -- вспомогательная функция. добавляет токены в программу
 merge :: Program -> Program -> Program
-merge (s1, t1, p1, f1) (s2, t2, p2, f2) = (sr, tr, pr, fr)
+merge (s1, t1, f1) (s2, t2, f2) = (sr, tr, fr)
   where
     sr = s1 ++ ('\n':s2)
     tr = t1 ++ t2
-    pr = p1 ++ p2
     fr = f1 ++ f2   
 
 -- В этом правиле происходит разбор блоков программы. Модуль, импорт, определение списка типов и определение функции. 
 program :: Parser Program
-program = do{ t <- ((module1      >>= \x -> return (x,  [],  [], []))
-                    <|> (import1  >>= \x -> return (x,  [],  [], []))
-                    <|> (typedef  >>= \x -> return ("", [x], [], []))
-                    <|> (prototype >>= \x -> return("", [], [x], []))
-                    <|> (function >>= \x -> return ("", [],  [], x)))
+program = do{ t <- ((module1      >>= \x -> return (x,  [],  []))
+                    <|> (import1  >>= \x -> return (x,  [],  []))
+                    <|> (typedef  >>= \x -> return ("", [x], []))
+                    <|> (function >>= \x -> return ("", [],  x)))
             ; many sn
             ; do{ ts <- program
                 ; return (merge t ts)
                 }
               <|> return t
             }
-          <|> return ("",  [],  [], [])
+          <|> return ("",  [], [])
 
 -- Базовое правило. Определяет возможность написать опциональный блок полностью на хаскеле в начале кода, отделенный от когда generic программы строкой "\n%%"
 code :: Parser Program
 code = do{ many sn
          ; do { hc <- try(beforeWord "\n%%")
               ; many sn
-              ; (s, t, p, f) <- program
-              ; return (hc ++ "\n\n" ++ s, t, p, f)
+              ; (s, t, f) <- program
+              ; return (hc ++ "\n\n" ++ s, t, f)
               }
            <|> do { p <- program
                   ; return p
@@ -272,7 +252,7 @@ code = do{ many sn
 
 -- Генерация кода
 generate :: Program -> String
-generate (s, t, p, f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions p f')
+generate (s, t, f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions f')
                         ++ "\n" ++ (genSymbolTable f) ++ "\n" ++ (genRead fr) ++ "\n" ++ (genShow fs)
   where
     f1 = untypes t f
@@ -332,24 +312,12 @@ whenDef (_, w, _) = w
 bodyDef :: (FunDef, When, String) -> String 
 bodyDef (_, _, b) = b
 
-genArgs :: String -> Int -> [String]
-genArgs s i = reverse $ genArgs' s i
-  where
-    genArgs' s 0 = []
-    genArgs' s i = (s ++ (show i)) : (genArgs' s (i-1))
-
-genFun :: [Prototype] -> [Function] -> String
-genFun p funs@ (f:fs) = let defaultArgName = "someNeverUnuseableName"
-                            fname          = funName f
-                            nargs          = length $ funTypesArgs f
-                            args           = case lookup fname p of
-                              Nothing -> genArgs defaultArgName nargs
-                              Just al -> al
-                            header         = fname ++ " :: [Dynamic] -> Maybe Dynamic\n"
-                                             ++ fname ++ " [" ++ (intercalate ", " args) ++ "]"
-                            testAndBody    = unlines $ map ((take 8 (repeat ' ')) ++) (genTestAndBody args funs)
-                            defaultWay     = fname ++ " _ = Nothing"
-                        in header ++ "\n" ++ testAndBody ++ "\n" ++ defaultWay
+genFun :: [Function] -> String
+genFun funs@ (f:fs) = let fname          = funName f
+                          header         = fname ++ " :: [Dynamic] -> Maybe Dynamic\n"
+                          testAndBody    = unlines $ genTestAndBody funs
+                          defaultWay     = fname ++ " _ = Nothing"
+                      in header ++ "\n" ++ testAndBody ++ "\n" ++ defaultWay
 
 genRead :: [Function] -> String
 genRead fs = let as   = map (snd . head . funTypesArgs) fs
@@ -367,54 +335,56 @@ genShow fs = let an = "someNeverUnuseableName"
                                               ++ " -> return (\"((\" ++ (" ++ b ++ ") ++ \") : " ++ t ++ ")\"))))") tas bs
              in "showTable :: [(TypeRep, (Dynamic -> Maybe String))]\n" ++ "showTable = [" ++ (intercalate ", " defs) ++ "]"
 
-genTestAndBody :: [String] -> [Function] -> [String]
-genTestAndBody _ []        = [] -- Ветка создается на случай если обработка не реализована
-genTestAndBody args (f:fs) = let s = "| " ++ (intercalate " && " (genTests args f))
-                                     ++ " && " ++ (genWhen args f) ++ " = " ++ (genBody args f)
-                             in s : (genTestAndBody args fs)
+genArgs :: Function -> [String]
+genArgs f = map snd (funTypesArgs f)
 
-genTests :: [String] -> Function -> [String]
-genTests args f = genTests' $ zip args (funTypesArgs f)
+genTestAndBody :: [Function] -> [String]
+genTestAndBody []        = []
+genTestAndBody (f:fs) = let s = (funName f) ++ " [" ++ (intercalate ", " (genArgs f)) ++ "]"
+                                ++ " | " ++ (intercalate " && " (genTests f))
+                                ++ " && " ++ (genWhen f) ++ " = " ++ (genBody f)
+                             in s : (genTestAndBody fs)
+
+genTests :: Function -> [String]
+genTests f = genTests' $ funTypesArgs f
   where
-    genTests' :: [(String, (String, String))] {- [(Name, (Type, InnerName))] -} -> [String]
+    genTests' :: [(String, String)] {- [(Type, Name)] -} -> [String]
     genTests' [] = []
-    genTests' (d:ds) = let test = "((dynTypeRep " ++ (fst d) ++ ") == (typeOf (undefined :: " ++ (fst $ snd d) ++ ")))"
+    genTests' (d:ds) = let test = "((dynTypeRep " ++ (snd d) ++ ") == (typeOf (undefined :: " ++ (fst d) ++ ")))"
                        in test : (genTests' ds)
 
--- Извлекает аргументы из динамиков. Получает список [(Name, (Type, InnerName))]
-genExtactArgs ::  [(String, (String, String))] {- [(Name, (Type, InnerName))] -} -> String
+-- Извлекает аргументы из динамиков. Получает список [(Type, Name)]
+genExtactArgs ::  [(String, String)] {- [(Type, Name)] -} -> String
 genExtactArgs [] = []
-genExtactArgs (d:ds) = "((fromDynamic " ++ (fst d) ++ ") :: Maybe " ++ (fst $ snd d) ++ ")"
-                       ++ " >>= \\" ++ (snd $ snd d) ++ " -> " ++ (genExtactArgs ds)
+genExtactArgs (d:ds) = "((fromDynamic " ++ (snd d) ++ ") :: Maybe " ++ (fst d) ++ ")"
+                       ++ " >>= \\" ++ (snd d) ++ " -> " ++ (genExtactArgs ds)
 
 
-genWhen :: [String] -> Function -> String
-genWhen args f = "((" ++ (genExtactArgs $ extractingArgs when)
-                 ++ "return (" ++ (genWhen' when) ++")) == Just True)"
+genWhen :: Function -> String
+genWhen f = "((" ++ extractingArgs when
+            ++ "return (" ++ (genWhen' when) ++")) == Just True)"
   where
     when = whenDef f
     fargs = funTypesArgs f
     genWhen' (Static when)  = when
     genWhen' (Dynamic when) = "(fromJust . (fromDynamic :: Dynamic -> Maybe Bool)) (" ++ when ++ ")"
-    extractingArgs (Static _) = zip args fargs
-    extractingArgs (Dynamic _) = filter shadowArgs (zip args fargs)
-      where
-        shadowArgs (ext, (_, int)) = ext /= int
+    extractingArgs (Static _) = genExtactArgs $ funTypesArgs f
+    extractingArgs (Dynamic _) = ""
 
-genBody :: [String] -> Function -> String
-genBody args f = "(" ++ (genExtactArgs $ zip args (funTypesArgs f)) ++ "return $ toDyn "
-                 ++ "((" ++ (bodyDef f) ++ ") :: " ++ (funType f) ++ "))"
+genBody :: Function -> String
+genBody f = "(" ++ (genExtactArgs $ funTypesArgs f) ++ "return $ toDyn "
+            ++ "((" ++ (bodyDef f) ++ ") :: " ++ (funType f) ++ "))"
 
--- Генерирует набор функций по прототипам и структурам описывающим их. Код не красив. Стоит переписать.
-genFunctions :: [Prototype] -> [Function] -> [String]
-genFunctions _ [] = []
-genFunctions ps funs@ (f:fs) =
+-- Генерирует набор функций по структурам описывающим их. Код не красив. Стоит переписать.
+genFunctions :: [Function] -> [String]
+genFunctions [] = []
+genFunctions funs@ (f:fs) =
   let name = funName f
       (fdefs, others) = partition (((==) name) . funName) funs
   in if name `notElem` registredNames then 
-       (genFun ps fdefs) : (genFunctions ps others)
+       (genFun fdefs) : (genFunctions others)
      else
-       genFunctions ps others
+       genFunctions others
    
    
 genSymbolTable :: [Function] -> String
@@ -477,28 +447,14 @@ main = do
 произвольное число заголовков как с блоком "when", так и без него. Для
 всех этих заголовков будет подставлено одинаковое тело. 
 
-При создании прототипа функции
->name '(' arg1name ',' arg2Name ',' argNName ')' ';'
-Определяются имена динамических переменных. Их можно использовать в
-коде блока when или в теле функции.  При использовании имен
-динамических переменных в теле функции или в блоке "when { … }" имена
-переменных определенные при реализации функции перекрывают имена из
-прототипа. В блоке "when ( … )" имена динамических переменных не
-скрываются. При использовании прототипов следует быть осторожным и
-избегать случаев перестановки имен в прототипе и п реализации. Так в
-примере
->name(a,b);
->Type name (Type1 b, Type2 a) { … }
-При извлечении переменных мы получим следующий код
->fromDynamic a >>= \b -> fromDynamic b -> \a -> …
-Что, очевидно, не будет работать, поскольку "fromDynamic b" пытается
-извлечь что-то из переменной имеющей тип отличный от Dynamic'а.
+В блоке "when ( … )" доступны только динамические переменные. А в
+блоках "when { ... }" и "{ body }" только статические
 
 Код в блоке "when" получает аргументы реальных типов и должен
 возвращать "Bool". Если вы хотите использовать вместо этого
 динамическую функцию, которая возвращает завернутый в "Dynamic" тип
 "Bool", то вам необходимо использовать круглые скобки, вместо
-фигурных, и использовать аргументы из прототипа функции.
+фигурных.
 
 При использовании в качестве типа аргумента или типа возвращаемого
 значения имени "name", определенного при помощи ключевого слова

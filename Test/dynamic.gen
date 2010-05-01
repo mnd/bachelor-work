@@ -11,13 +11,11 @@ import qualified Integer
 import qualified Complex
 %%
 
-plus (b1, b2);
-
-Integer.MyInt plus (Integer.MyInt b1, Integer.MyInt b2)
+Integer.MyInt plus (Integer.MyInt b1, Integer.MyInt b2) when ( toDyn True )
 {
   Integer.plus b1 b2
 }
-Integer.MyInt mul (Integer.MyInt a1, Integer.MyInt a2)
+Integer.MyInt mul (Integer.MyInt a1, Integer.MyInt a2) when { a1 > (Integer.MyInt 7) }
 {
   Integer.mul a1 a2
 }

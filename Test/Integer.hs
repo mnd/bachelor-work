@@ -10,7 +10,7 @@ module Integer
 import Data.Typeable
 
 data MyInt = MyInt Integer
-             deriving (Show, Eq, Typeable)
+             deriving (Show, Eq, Ord, Typeable)
                       
 plus :: MyInt -> MyInt -> MyInt
 plus (MyInt a) (MyInt b) = MyInt (a + b)
