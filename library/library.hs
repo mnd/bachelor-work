@@ -55,11 +55,13 @@ slplus as bs = map slplus' ns
       (Just f1, Just f2) -> (n, f1 `dplus` f2)
           
 -- Объединяет два списка типов
-rlplus :: [(String, (String -> Dynamic))] -> [(String, (String -> Dynamic))] -> [(String, (String -> Dynamic))]
+rlplus :: [(String, (String -> Dynamic))] -> [(String, (String -> Dynamic))]
+          -> [(String, (String -> Dynamic))]
 rlplus = (++)
 
 -- Объединяет два списка типов выводимых
-shlplus :: [(TypeRep, (Dynamic -> Maybe String))] -> [(TypeRep, (Dynamic -> Maybe String))] -> [(TypeRep, (Dynamic -> Maybe String))]
+shlplus :: [(TypeRep, (Dynamic -> Maybe String))] -> [(TypeRep, (Dynamic -> Maybe String))]
+           -> [(TypeRep, (Dynamic -> Maybe String))]
 shlplus = (++)
 
 
@@ -151,14 +153,28 @@ beforeWord s = do { try (string s)
 
 ------ Теперь разбор формата команды
 
-
+number :: Parser Char
+number = char '0' <|> char '1' <|> char '2' <|> char '3' <|> char '4'
+         <|> char '5' <|> char '6' <|> char '7' <|> char '8' <|> char '9'
+         <|> char '.'
+         
 -- Разбирает аргумент в виде (arg : Type)
 argument :: Parser (String, String) -- (Representation, Type)
-argument = do{ char '('
-             ; r <- fmap trim (beforeWord ":")
-             ; t <- fmap trim (beforeWord ")")
-             ; return (r, t)
+argument = do{ s <- try $ many1 number
+             ; if isInt s then
+                 return (s, "Integer")
+               else
+                 return (s, "Double")
              }
+           -- <|> [ array of number ] <|> [[ matrix of number ]] <|> (re, im) complex
+           <|> do{ char '('
+                 ; r <- fmap trim (beforeWord "::")
+                 ; t <- fmap trim (beforeWord ")")
+                 ; return (r, t)
+                 }
+
+isInt :: String -> Bool
+isInt = notElem '.'
            
 -- Парсит список аргументов
 argList :: Parser [(String, String)]
