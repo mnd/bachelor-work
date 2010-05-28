@@ -184,38 +184,38 @@ bodyDefinition = do { char '{'
                     }
 
 type FunDef = (TypeName,[TypeName])
-type Function = (FunDef, When, String)
+data Function = Function FunDef When String
 
 -- Полностью разбирает функцию: несколько определений с опциональными блоками when и тело функции
 function :: Parser [Function]
 function = do{ def <- definition
              ; many sn
              ; do{ body <- bodyDefinition
-                 ; return [(def, emptyWhen, body)]
+                 ; return [Function def emptyWhen body]
                  }
                <|> do{ when <- whenDefinition
                      ; many sn
                      ; do{ body <- bodyDefinition
-                         ; return [(def, when, body)]
+                         ; return [Function def when body]
                          }
                        <|> do{ fun <- function
-                             ; let body = (\(_,_,b) -> b) $ head fun
-                             ; return ((def, when, body):fun)
+                             ; let body = (\(Function _ _ b) -> b) $ head fun
+                             ; return ((Function def when body):fun)
                              }
                      }
                <|> do{ fun <- function
-                     ; let body = (\(_,_,b) -> b) $ head fun
-                     ; return ((def, emptyWhen, body):fun)
+                     ; let body = (\(Function _ _ b) -> b) $ head fun
+                     ; return ((Function def emptyWhen body):fun)
                      }
              }
            where
              emptyWhen = Static "True"
 
-type Program = (String {- modules + imports -}, [Typedef],[Function])
+data Program = Program String {- modules + imports -} [Typedef] [Function]
 
 -- вспомогательная функция. добавляет токены в программу
 merge :: Program -> Program -> Program
-merge (s1, t1, f1) (s2, t2, f2) = (sr, tr, fr)
+merge (Program s1 t1 f1) (Program s2 t2 f2) = (Program sr tr fr)
   where
     sr = s1 ++ ('\n':s2)
     tr = t1 ++ t2
@@ -223,25 +223,25 @@ merge (s1, t1, f1) (s2, t2, f2) = (sr, tr, fr)
 
 -- В этом правиле происходит разбор блоков программы. Модуль, импорт, определение списка типов и определение функции. 
 program :: Parser Program
-program = do{ t <- ((module1      >>= \x -> return (x,  [],  []))
-                    <|> (import1  >>= \x -> return (x,  [],  []))
-                    <|> (typedef  >>= \x -> return ("", [x], []))
-                    <|> (function >>= \x -> return ("", [],  x)))
+program = do{ t <- ((module1      >>= \x -> return $ Program x  []  [])
+                    <|> (import1  >>= \x -> return $ Program x  []  [])
+                    <|> (typedef  >>= \x -> return $ Program "" [x] [])
+                    <|> (function >>= \x -> return $ Program "" []  x))
             ; many sn
             ; do{ ts <- program
                 ; return (merge t ts)
                 }
               <|> return t
             }
-          <|> return ("",  [], [])
+          <|> return (Program ""  [] [])
 
 -- Базовое правило. Определяет возможность написать опциональный блок полностью на хаскеле в начале кода, отделенный от когда generic программы строкой "\n%%"
 code :: Parser Program
 code = do{ many sn
          ; do { hc <- try(beforeWord "\n%%")
               ; many sn
-              ; (s, t, f) <- program
-              ; return (hc ++ "\n\n" ++ s, t, f)
+              ; (Program s t f) <- program
+              ; return $ Program (hc ++ "\n\n" ++ s) t f
               }
            <|> do { p <- program
                   ; return p
@@ -252,7 +252,7 @@ code = do{ many sn
 
 -- Генерация кода
 generate :: Program -> String
-generate (s, t, f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions f')
+generate (Program s t f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions f')
                         ++ "\n" ++ (genSymbolTable f) ++ "\n" ++ (genRead fr) ++ "\n" ++ (genShow fs)
   where
     f1 = untypes t f
@@ -267,19 +267,20 @@ untypes :: [Typedef] -> [Function] -> [Function]
 untypes ts fs = concatMap untypes' fs
   where
     -- (TypeName,[TypeName])
-    untypes' func@ (((nt, nn), as), w, b) =
+    untypes' func@ (Function ((nt, nn), as) w b) =
       case lookup nt ts of
         Nothing -> untypesArgs func
-        Just types -> concatMap (\t -> untypesArgs (((t, nn), as), w, b)) types
+        Just types -> concatMap (\t -> untypesArgs (Function ((t, nn), as) w b)) types
 
     -- заменяет тип num-того аргумента функции func на newType
-    untNArg func@((n,as), w, b) newType num = let an = (snd $ as !! num)
-                                              in ((n, changeN as (newType, an) num), w, b)
+    untNArg func@(Function (n,as) w b) newType num =
+      let an = snd $ as !! num
+      in Function (n, changeN as (newType, an) num) w b
     
-    untypesArgs func@ ((_,as), _, _)   = untypesArgs' func (length as)
+    untypesArgs func@ (Function (_,as) _ _)   = untypesArgs' func (length as)
       where
         untypesArgs' func 0 = [func]
-        untypesArgs' func@ ((n,as), w, b) inum =
+        untypesArgs' func@ (Function (n,as) w b) inum =
           let num = inum - 1
               at  = fst (as !! num)
               an  = snd (as !! num)
@@ -305,12 +306,12 @@ funType = fst . funTypeName
 funTypesArgs :: Function -> [TypeName]
 funTypesArgs = snd . funDef
 
-funDef :: (FunDef, When, String) -> FunDef
-funDef  (f, _, _) = f
-whenDef :: (FunDef, When, String) -> When
-whenDef (_, w, _) = w
-bodyDef :: (FunDef, When, String) -> String 
-bodyDef (_, _, b) = b
+funDef :: Function -> FunDef
+funDef  (Function f _ _) = f
+whenDef :: Function -> When
+whenDef (Function _ w _) = w
+bodyDef :: Function -> String 
+bodyDef (Function _ _ b) = b
 
 genFun :: [Function] -> String
 genFun funs@ (f:fs) = let fname          = funName f
