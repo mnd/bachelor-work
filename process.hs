@@ -184,7 +184,14 @@ bodyDefinition = do { char '{'
                     }
 
 type FunDef = (TypeName,[TypeName])
-data Function = Function FunDef When String
+data Function = Function {
+  funDef :: FunDef,
+  whenDef :: When,
+  bodyDef :: String
+  }
+
+  
+
 
 -- Полностью разбирает функцию: несколько определений с опциональными блоками when и тело функции
 function :: Parser [Function]
@@ -305,13 +312,6 @@ funType = fst . funTypeName
 
 funTypesArgs :: Function -> [TypeName]
 funTypesArgs = snd . funDef
-
-funDef :: Function -> FunDef
-funDef  (Function f _ _) = f
-whenDef :: Function -> When
-whenDef (Function _ w _) = w
-bodyDef :: Function -> String 
-bodyDef (Function _ _ b) = b
 
 genFun :: [Function] -> String
 genFun funs@ (f:fs) = let fname          = funName f

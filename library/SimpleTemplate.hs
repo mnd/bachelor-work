@@ -7,16 +7,17 @@ module SimpleTemplate (
        ) where
 
 import DynamicGen
-import Data.Dynamic 
 
 plus :: [Dynamic] -> Maybe Dynamic
-plus [a, b] = $(typesAndExecutes [
+plus [a, b] = $(testsAndExecutes [
                    ([([| a |], [t| Integer |]),
                      ([| b |], [t| Integer |])],
+                    Static [| True |],
                     [| a + b |]),
                    
                    ([([| a |], [t| Double |]),
                      ([| b |], [t| Double |])],
+                    Static [| True |],
                     [| a + b |])
                 ])
               
@@ -30,14 +31,9 @@ sub [a, b] = $(typesAndExecutes [
                      ([| b |], [t| Double |])],
                     [| a - b |])
                 ])
-              
 
-symbolTable = [("sub", sub), ("plus", plus)]
-readTable   = $(genReadTable [
-                   ("Integer", [| read |], [t| Integer |]),
-                   ("Double",  [| read |], [t| Double  |])
-                   ])
-showTable   = $(genShowTable [
-                   ([t| Integer |], "Integer", [| show |]),
-                   ([t| Double  |], "Double",  [| show |])
-                   ])
+genSymbolTable [("sub", [| sub |]), ("plus", [| plus |])]
+genReadShowTable [
+  ([t| Integer |], "Integer", [| read |], [| show |]),
+  ([t| Double  |], "Double",  [| read |], [| show |])
+  ]
