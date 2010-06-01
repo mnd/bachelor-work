@@ -3,7 +3,7 @@ import Data.List
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Token
 
------Вспомогательные функции-------------------------
+-----Helping Functions-------------------------
 spaceSymbol :: Char -> Bool
 spaceSymbol ' '  = True
 spaceSymbol '\n' = True
@@ -19,14 +19,14 @@ trimTail = reverse . trimHead . reverse
 trim :: String -> String
 trim s = trimTail $ trimHead s
 
-----------Грамматика--------------------------------
+----------Grammar--------------------------------
 word :: Parser String
 word = many1 (alphaNum <|> oneOf "_'." <?> "") <?> "word"
 
--- пробельные символы, которые как правило будут игнорироваться
+-- space symbols
 sn = (space <|> newline <|> tab)
 
--- список слов word через пробельные символы sn
+-- world list with sn as delimeter
 wordList :: Parser [String]
 wordList = do{ s1 <- word
           ; many sn
@@ -36,7 +36,7 @@ wordList = do{ s1 <- word
             <|> return [s1]
           }
 
--- Для считывания до конца строки. Предпологается, что мы уже прочитали открывающую двойную ковычку и ищем закрывающую
+-- read string before closing ". And we think that openinig " was early.
 quotedString :: Parser String
 quotedString = do{ char '\\'
                  ; c1 <- anyChar
@@ -51,19 +51,17 @@ quotedString = do{ char '\\'
                       ; return (c2:s)
                       }
 
--- считывает весь текст до строки "s". Всегда обрабатывает фигурные и круглые
--- скобки как парные и s внутри них не ищет.
--- Аналогично с одинарными и двойными ковычками
+-- Read all text before string "s". Inside ( … ), [ … ], { … } and " … " blocks text does not seek
 beforeWord :: String -> Parser String
 beforeWord s = do { try (string s)
                   ; return ""
                   }
                <|> do { c <- anyChar
                       ; (case c of
-                            '\'' -> do{ s0 <- beforeWord "'"
-                                     ; s0' <- beforeWord s
-                                     ; return ((c:s0) ++ ('\'':s0'))
-                                     }
+                            -- '\'' -> do{ s0 <- beforeWord "'"
+                            --          ; s0' <- beforeWord s
+                            --          ; return ((c:s0) ++ ('\'':s0'))
+                            --          }
                             '(' -> do{ s1 <- beforeWord ")"
                                      ; s1' <- beforeWord s
                                      ; return ((c:s1) ++ (')':s1'))
@@ -92,14 +90,14 @@ import1 = do{ try (string "import")
             ; return ("import" ++ s)
             }
           
--- Считывает и возвращает "import haskell code when"
+-- Read and return "import haskell code when"
 module1 :: Parser String
 module1 = do{ try (string "module")
             ; s <- beforeWord "where"
             ; return ("module" ++ s ++ "where")
             }
 
--- Список слов через запятую. Используется для разбора списка типов внутри "[" "]"
+-- list of words separated by commas.
 list :: Parser [String]
 list = do{ t <- fmap unwords wordList
              ; many sn
@@ -112,7 +110,7 @@ list = do{ t <- fmap unwords wordList
              }
 
 type Typedef = (String, [String])
--- Разбирает блок "typedef name = [ types ]" и возвращает пару (name, [types])
+-- Parse "typedef name = [ types ]" block and return pair (name, [types])
 typedef :: Parser Typedef
 typedef = do{ try (string "typedef")
             ; many1 sn
@@ -132,11 +130,11 @@ typedef = do{ try (string "typedef")
 
             
 type TypeName = (String, String)
---  Вспомогательная функция. Преобразует список слов в пару тип и имя. Например ["Maybe", "Bool", "name"] в ("Maybe Bool", "name")
+-- Transform ["Maybe", "Bool", "name"] list in pair ("Maybe Bool", "name") 
 typeNameParse :: [String] -> TypeName
 typeNameParse x = (unwords (init x), last x)
 
--- Разбирает аргументы функции, почти идентично правилу list, только слегка иначе обрабатывается 
+-- Parse function arguments list. 
 funArgs :: Parser [TypeName]
 funArgs = do{ a <- fmap typeNameParse wordList
             ; do{ char ','
@@ -147,7 +145,7 @@ funArgs = do{ a <- fmap typeNameParse wordList
               <|> return [a]
             }
 
--- Разбирает определение функции "Type name (types with args)"
+-- parse function definition "Type name (types with args)"
 definition :: Parser FunDef
 definition = do{ ftn <- fmap typeNameParse wordList
                ; many sn
@@ -161,7 +159,7 @@ definition = do{ ftn <- fmap typeNameParse wordList
 
 data When = Static String | Dynamic String
           deriving Show
--- Разбирает блок when
+-- Parse 'when' block
 whenDefinition :: Parser When
 whenDefinition = do{ try (string "when")
                    ; many sn
@@ -176,7 +174,7 @@ whenDefinition = do{ try (string "when")
                        }
                    }
 
--- разбирает тело функции
+-- parse function body
 bodyDefinition :: Parser String
 bodyDefinition = do { char '{'
                     ; body <- fmap trim (beforeWord "}")
@@ -191,9 +189,7 @@ data Function = Function {
   }
 
   
-
-
--- Полностью разбирает функцию: несколько определений с опциональными блоками when и тело функции
+-- Parse whole function: Several definitions with optional blocks 'when' and body of the function
 function :: Parser [Function]
 function = do{ def <- definition
              ; many sn
@@ -220,7 +216,7 @@ function = do{ def <- definition
 
 data Program = Program String {- modules + imports -} [Typedef] [Function]
 
--- вспомогательная функция. добавляет токены в программу
+-- merge two tokens
 merge :: Program -> Program -> Program
 merge (Program s1 t1 f1) (Program s2 t2 f2) = (Program sr tr fr)
   where
@@ -228,7 +224,7 @@ merge (Program s1 t1 f1) (Program s2 t2 f2) = (Program sr tr fr)
     tr = t1 ++ t2
     fr = f1 ++ f2   
 
--- В этом правиле происходит разбор блоков программы. Модуль, импорт, определение списка типов и определение функции. 
+-- Parse programm blocks. module, import, typedefs and functions
 program :: Parser Program
 program = do{ t <- ((module1      >>= \x -> return $ Program x  []  [])
                     <|> (import1  >>= \x -> return $ Program x  []  [])
@@ -242,7 +238,7 @@ program = do{ t <- ((module1      >>= \x -> return $ Program x  []  [])
             }
           <|> return (Program ""  [] [])
 
--- Базовое правило. Определяет возможность написать опциональный блок полностью на хаскеле в начале кода, отделенный от когда generic программы строкой "\n%%"
+-- Root rule. Allow to write optional block in pure haskell before "\n%%", and only after this start to parse generic programm
 code :: Parser Program
 code = do{ many sn
          ; do { hc <- try(beforeWord "\n%%")
@@ -255,9 +251,9 @@ code = do{ many sn
                   }
          }
 
---------------------- Грамматика кончилась. Обработка. -------------------------------------
+--------------------- And of grammar. Processing -------------------------------------
 
--- Генерация кода
+-- Code generation
 generate :: Program -> String
 generate (Program s t f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions f')
                         ++ "\n" ++ (genSymbolTable f) ++ "\n" ++ (genRead fr) ++ "\n" ++ (genShow fs)
@@ -266,10 +262,10 @@ generate (Program s t f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ 
     (fr, f2) = partition (((==) "read") . funName) f1
     (fs, f') = partition (((==) "show") . funName) f2
     
--- Модули которые нужны всегда
+-- Restricted modules
 restrictedModules = unlines ["import Data.Typeable", "import Data.Dynamic", "import Data.Maybe", "import Monad"]
 
--- Извлечь типы определенные через typedef
+-- expand types defined by typedef
 untypes :: [Typedef] -> [Function] -> [Function]
 untypes ts fs = concatMap untypes' fs
   where
@@ -279,7 +275,7 @@ untypes ts fs = concatMap untypes' fs
         Nothing -> untypesArgs func
         Just types -> concatMap (\t -> untypesArgs (Function ((t, nn), as) w b)) types
 
-    -- заменяет тип num-того аргумента функции func на newType
+    -- Change type of num'th argument function func to newType
     untNArg func@(Function (n,as) w b) newType num =
       let an = snd $ as !! num
       in Function (n, changeN as (newType, an) num) w b
@@ -297,12 +293,12 @@ untypes ts fs = concatMap untypes' fs
              Just types -> concatMap (\t -> untypesArgs' (untNArg func t num) num) types
                                                  
 
--- заменить Nтый элемент списка новым элементом
+-- replace n'th of the list with t
 changeN :: [a] -> a -> Int -> [a]
 changeN ls t n | 0 <= n && n < length ls = (take n ls) ++ [t] ++ (drop (n+1) ls)
                | otherwise               = ls
 
--- Извлечение данных из функции
+-- Extract Data from Function
 funTypeName :: Function -> (String, String)
 funTypeName = fst . funDef
 funName :: Function -> String
@@ -354,7 +350,7 @@ genTests f = genTests' $ funTypesArgs f
     genTests' (d:ds) = let test = "((dynTypeRep " ++ (snd d) ++ ") == (typeOf (undefined :: " ++ (fst d) ++ ")))"
                        in test : (genTests' ds)
 
--- Извлекает аргументы из динамиков. Получает список [(Type, Name)]
+-- Extract args from Dynamic. Get list [(Type, Name)]
 genExtactArgs ::  [(String, String)] {- [(Type, Name)] -} -> String
 genExtactArgs [] = []
 genExtactArgs (d:ds) = "((fromDynamic " ++ (snd d) ++ ") :: Maybe " ++ (fst d) ++ ")"
@@ -376,7 +372,7 @@ genBody :: Function -> String
 genBody f = "(" ++ (genExtactArgs $ funTypesArgs f) ++ "return $ toDyn "
             ++ "((" ++ (bodyDef f) ++ ") :: " ++ (funType f) ++ "))"
 
--- Генерирует набор функций по структурам описывающим их. Код не красив. Стоит переписать.
+-- generate function defenitions from Function structs
 genFunctions :: [Function] -> [String]
 genFunctions [] = []
 genFunctions funs@ (f:fs) =
@@ -398,8 +394,8 @@ genSymbolTable funs = let fs = filter ((flip notElem registredNames) . funName) 
 registredNames :: [String]
 registredNames = ["read", "show", "symbolTable", "readTable"]
 
---------------------- Обработка закончилась. Использование: runFile code "dynamic.gen" >>= return . generate --------------------------------
---------------------------------------------- то есть функции "generate" отдавать вывод парсера "code" --------------------------------------
+--------------------- End of processing. Using: runFile code "dynamic.gen" >>= return . generate --------------------------------
+--------------------------------------------- give to function "generate" output of parser "code" --------------------------------------
 
 run p input = 
   case (parse p "" input) of

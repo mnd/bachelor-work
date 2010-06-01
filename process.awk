@@ -39,11 +39,11 @@ function gen_args(string, delim, num,      res, i)
 function get_whole_comment(res, u, t)
 {
     if ((t = index($0, "{-")) != 0)
-    { # если вызов функции оправдан
+    { # if $0 contain {- 
 	res = $0
 
 	u = index(substr($0, t + 2), "-}")
-	while (u == 0)		# пока не найдем конец многострочного комментария
+	while (u == 0)		# while end of comment not found
 	{	
 	    if (getline <= 0)
 	    {
@@ -52,7 +52,7 @@ function get_whole_comment(res, u, t)
 		print res > "/dev/stderr"
 		exit
 	    }
-	    res = res $0	# объединяем строки
+	    res = res $0	# concatenating string
 	    u = index($0, "-}")
 	}
 	
@@ -65,19 +65,18 @@ function get_whole_comment(res, u, t)
 #---------------------------------------------------------------------
 
 BEGIN {
-    split("", modules)		# список модулей
-    split("", generics)		# список функций
-    split("", names)		# список имён функций
+    split("", modules)		# modules list
+    split("", generics)		# functions list
+    split("", names)		# function names list
     # 
     reverse = 1;
 }
 
-/{-[[:space:]]*REGISTER:/ {		# определение для функций вида:
+/{-[[:space:]]*REGISTER:/ {	# Function definition:
 				# {- REGISTER: sum = Module.Name.func :: Integer -> Integer -> Integer -}
-				# {- PREGISTER symbol | predicat a1 a3 aN = module.name :: type -> type -> … -> type -}
-				# TODO: добавить регистрацию без явного указания типов, но с указанием количества аргументов. Также с предикатом и без
+				# {- REGISTER symbol | predicat a1 a3 aN = module.name :: type -> type -> … -> type -}
     
-    #----------------Извлечение данных-----------------------------
+    #----------------String Parsing-----------------------------
     str = get_whole_comment()
     where = match(str, /^REGISTER:[[:space:]]*([[:alnum:]]+)[[:space:]]*\|([^=]*)=[[:space:]]*(([[:alnum:].]+)\.[[:alnum:]]+)[[:space:]]*::[[:space:]]*(.*)$/, arr)
     if (where)
@@ -108,36 +107,35 @@ BEGIN {
     # 	types[i] = module"."types[i]
     # type = join(types, 1, args+1, " -> ")
 
-    #-------------------Имя----------------------------------------
+    #-------------------Name----------------------------------------
 
     names[symbol] = ""
     
-    #------------------Модуль--------------------------------------
+    #------------------Module--------------------------------------
 
-    modules["import qualified " module "\n"] = "" # добавили модуль
+    modules["import qualified " module "\n"] = "" # append module to module list
 
-    #-----------------Объявление функции---------------------------
+    #-----------------Function type---------------------------
     # Сгенерируем тип функции
     defn = symbol " :: " rep("Dynamic -> ", args) "Maybe Dynamic\n"
     # объявление функции
     defn = defn symbol " " gen_args("arg", " ", args) "\n"
 
-    #------------------Тело функции--------------------------------
+    #------------------function body--------------------------------
 
-    # Эту часть можно хранить в хэш-массиве с ключом defn
-    # проверки.
+    # tests
     bodyfn = "    | "
     for (i = 1; i <= args; i++)
 	bodyfn = bodyfn "(typeOf (undefined :: " types[i] ") == dynTypeRep arg"i") && "
     bodyfn = bodyfn "((("predicat") >>= (fromDynamic :: (Dynamic -> Maybe Bool))) == (Just True))"
 
-    # тело функции 
+    # body
     bodyfn = bodyfn " = do\n"
     for (i = 1; i <= args; i++)
 	bodyfn = bodyfn "        a"i" <- ((fromDynamic arg"i") :: (Maybe " types[i] "))\n"
     bodyfn = bodyfn "        Just $ toDyn $ ((" name ") :: (" type ")) " gen_args("a", " ", args) "\n"
 
-    #------------Запись в хэш[объявление] = тело-------------------
+    #------------Write hash[type] = body-------------------
     if (reverse)
 	generics[defn] = bodyfn generics[defn]
     else
