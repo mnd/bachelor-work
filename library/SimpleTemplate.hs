@@ -7,13 +7,14 @@ module SimpleTemplate (
        ) where
 
 import DynamicGen
+import Unsafe.Coerce
 
 plus :: [Dynamic] -> Maybe Dynamic
 plus [a, b] = $(testsAndExecutesN [
                    ([('a, [t| Integer |]),
-                     ('b, [t| Integer |])],
+                     ('b, [t| Double |])],
                     Static [| True |],
-                    [| a + b |]),
+                    [| (unsafeCoerce (((+) . fromIntegral) :: Integer -> Double -> Double) :: (a -> b -> b)) a b |]),
                    
                    ([('a, [t| Double |]),
                      ('b, [t| Double |])],
