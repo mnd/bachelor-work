@@ -257,7 +257,7 @@ genShowTable ts =
   in  runQ [d| showTable :: [(TypeRep, (Dynamic -> Maybe String))]
                showTable = $list |]
   where
-    genShowTable'' (varType, typeString, show) exp = [| ((typeOf (undefined :: $varType)), \d -> (fromDynamic d :: (Maybe $varType)) >>= \o -> return ("((" ++ ($show o) ++ ") :: " ++ typeString ++")")) : $exp |]
+    genShowTable'' (varType, typeString, show) exp = [| ((typeOf (undefined :: $varType)), \d -> (fromDynamic d :: (Maybe $varType)) >>= \o -> return ("(" ++ ($show o) ++ " :: " ++ typeString ++")")) : $exp |]
 
 -- Аналогично, но получает имя типа
 genShowTable' :: (Quasi m) => [(Name, String, ExpQ)] -> m [Dec]

@@ -329,7 +329,7 @@ genShow fs = let an = "someNeverUnuseableName"
                  bs   = map bodyDef fs
                  defs = zipWith (\(t, a) b -> "((typeOf (undefined :: (" ++ t ++ "))), (\\" ++ an
                                               ++ " -> ((fromDynamic (" ++ an ++ ") :: (Maybe (" ++ t ++ "))) >>= \\" ++ a
-                                              ++ " -> return (\"((\" ++ (" ++ b ++ ") ++ \") :: " ++ t ++ ")\"))))") tas bs
+                                              ++ " -> return (\"(\" ++ (" ++ b ++ ") ++ \" :: " ++ t ++ ")\"))))") tas bs
              in "showTable :: [(TypeRep, (Dynamic -> Maybe String))]\n" ++ "showTable = [" ++ (intercalate ", " defs) ++ "]"
 
 genArgs :: Function -> [String]

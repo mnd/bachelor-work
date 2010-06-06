@@ -5,5 +5,5 @@ import Monad
 
 main = repl $ SPD [] [] []
                   [("first", (S.symbolTable, S.readTable, S.showTable)),
-                   ("seconf", (ST.symbolTable, ST.readTable, ST.showTable))]
+                   ("second", (ST.symbolTable, ST.readTable, ST.showTable))]
                   

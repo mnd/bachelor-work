@@ -173,10 +173,28 @@ Haskell. Данное расширение позволяет оперирова
 корректными в языке Haskell на уровне абстрактных синтаксических
 деревьев.
 
-Так как данное расширение работает, также как и сам Haskell, в рамках
-функциональной парадигмы программирования, то внутри функции
-генерирующей тип DataUnit невозможно узнать информацию о типах данных
-определенных в различных модулях системы.
+При помощи Template Haskell возможно использование функций
+\begin{code}
+$(zipN 3)
+$(deriveShow ''Maybe)
+\end{code}
+Которые при компиляции развернутся в
+\begin{code}
+let zip = \ y1 y2 y3 ->
+  case (y1,y2,y3) of
+    (x1:xs1,x2:xs2,x3:xs3) -> (x1,x2,x3) : ff xs1 xs2 xs3
+    (_,_,_) -> []
+in zip
+
+instance Show (Maybe a) where
+  show (Just a) = "Just" ++ show a
+  show (Nothing) = "Nothing"
+\end{code}
+
+К сожалению, так как данное расширение работает, также как и сам
+Haskell, в рамках функциональной парадигмы программирования, то внутри
+функции генерирующей тип DataUnit невозможно узнать информацию о типах
+данных определенных в различных модулях системы.
 
 \subsection{Generic Haskell}
 
@@ -613,4 +631,58 @@ Double func (Double a, Double b)
 
 Для совместного испольования набора динамических функций также
 необходимо иметь библиотеку реализующую логику их взаимодействия.
+
+Была разработана библиотека предоставляющая ряд сущностей:
+\begin{code}
+-- Объединяет две динамические функции в одну
+dplus :: DFunction -> DFunction -> DFunction
+
+-- Объединяют две таблицы данных в одну
+stplus :: SymbolTable -> SymbolTable -> SymbolTable
+rtplus :: ReadTable -> ReadTable -> ReadTable
+shtplus :: ShowTable -> ShowTable -> ShowTable
+
+-- По таблицам данных преобразовывают ввод во внутренние структуры
+getFun :: SymbolTable -> String -> Maybe DFunction
+getRead :: ReadTable -> String -> Maybe (String -> Dynamic)
+argToDyn :: ReadTable -> Argument -> Maybe Dynamic
+
+-- Преобразует данные из внутреннего представления во внешнее
+getShow :: ShowTable -> Dynamic -> Maybe String
+
+-- Производит полный разбор введённой строки
+parseString :: String -> Maybe Function
+
+-- Выполняет код и возвращает результат
+eval :: SymbolTable -> ReadTable -> Function -> Maybe Dynamic
+\end{code}
+
+Кроме того создана функция реализующая полностью REPL
+\begin{code}
+data ProgramData =
+  PD { readInput :: IO String,
+       symbolTable :: SymbolTable,
+       readTable :: ReadTable,
+       showTable :: ShowTable,
+       importModules :: [(String, (SymbolTable, ReadTable, ShowTable))]
+     }
+
+repl :: ProgramData -> IO ()
+\end{code}
+
+Таким образом предоставлены простые интерфейсы для совместного
+использования динамических функций
+
+Пример программы
+\begin{code}
+import DynamicFace
+import qualified Simple as S
+import qualified SimpleTemplate as ST
+import Monad
+
+main = repl $ SPD S.symbolTable, S.readTable, S.showTable
+                  [("second", (ST.symbolTable, ST.readTable, ST.showTable))]
+
+\end{code} %$
+
 \end{document}

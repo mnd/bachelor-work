@@ -78,7 +78,7 @@ shtplus :: ShowTable -> ShowTable -> ShowTable
 shtplus = (++)
 
 -- По имени функции и таблице символов возвращает функцию
-getFun :: SymbolTable -> String -> Maybe ([Dynamic] -> Maybe Dynamic)
+getFun :: SymbolTable -> String -> Maybe DFunction
 getFun = flip lookup
 
 getShow :: ShowTable -> Dynamic -> Maybe String
@@ -89,6 +89,13 @@ getShow sl a = case lookup (dynTypeRep a) sl of
 -- По имени типа и списку типов возвращает функцию чтения
 getRead :: ReadTable -> String -> Maybe (String -> Dynamic)
 getRead = flip lookup
+
+data Function = Fun { fname :: String,
+                      fargs :: [Argument]
+                    }
+data Argument = Arg { aname :: String,
+                      atype :: String
+                    }
 
 ---------------------------- Скопировано из ../process.hs явно стоит оформить как-то отдельной библиотекой -----------
 
@@ -168,28 +175,28 @@ beforeWord s = do { try (string s)
 number :: Parser Char
 number = char '0' <|> char '1' <|> char '2' <|> char '3' <|> char '4'
          <|> char '5' <|> char '6' <|> char '7' <|> char '8' <|> char '9'
-         <|> char '.'
+         <|> char '.' <|> char '-' <|> char '+' 
          
 -- Разбирает аргумент в виде (arg : Type)
-argument :: Parser (String, String) -- (Representation, Type)
+argument :: Parser Argument -- (Representation, Type)
 argument = do{ s <- try $ many1 number
              ; if isInt s then
-                 return (s, "Integer")
+                 return $ Arg s "Integer"
                else
-                 return (s, "Double")
+                 return $ Arg s "Double"
              }
            -- <|> [ array of number ] <|> [[ matrix of number ]] <|> (re, im) complex
            <|> do{ char '('
                  ; r <- fmap trim (beforeWord "::")
                  ; t <- fmap trim (beforeWord ")")
-                 ; return (r, t)
+                 ; return $ Arg r t
                  }
 
 isInt :: String -> Bool
 isInt = notElem '.'
            
 -- Парсит список аргументов
-argList :: Parser [(String, String)]
+argList :: Parser [Argument]
 argList = do{ a <- argument
             ; many sn
             ; do{ as <- argList
@@ -198,12 +205,12 @@ argList = do{ a <- argument
               <|> return [a]
             }
           
-function :: Parser (String, [(String, String)]) -- (funname, arglist)
+function :: Parser Function -- (funname, arglist)
 function = do{ many sn
              ; n <- word
              ; many sn
              ; as <- argList
-             ; return (n, as)
+             ; return $ Fun n as
              }
 
 -- Минимальное определение языка закончено
@@ -215,18 +222,16 @@ run p input =
     Right x  -> Just x
 
 
-parseString :: String -> Maybe (String, [(String, String)])
+parseString :: String -> Maybe Function
 parseString = run function
 
-argToDyn :: ReadTable -> (String, String) -> Maybe Dynamic
-argToDyn tl (r, t) = ap (getRead tl t) (Just r)
+argToDyn :: ReadTable -> Argument -> Maybe Dynamic
+argToDyn tl (Arg r t) = ap (getRead tl t) (Just r)
 
 -- По списку разобранной функции, списку символов
 -- и списку типов вычисляет результат
-eval :: SymbolTable -> ReadTable
-        -> (String, [(String, String)]) -- (fun, argList)
-        -> Maybe Dynamic
-eval sl tl (f, al) = do
+eval :: SymbolTable -> ReadTable -> Function -> Maybe Dynamic
+eval sl tl (Fun f al) = do
   fun  <- getFun sl f
   args <- sequence $ map (argToDyn tl) al
   fun args
@@ -291,3 +296,4 @@ repl pd = readInput pd >>= \s1 ->
             Just s -> putStrLn s
             Nothing -> putStrLn "can't parse input"
           repl pd
+
