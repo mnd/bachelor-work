@@ -1,0 +1,71 @@
+% -*- mode: LaTeX; mode: auto-fill; mode: flyspell; coding: utf-8; -*-
+\documentclass[14pt,a4paper,times,bachelor,
+    subf, href, fixint=false,
+    draft
+]{disser}
+
+\usepackage[
+  a4paper, mag=1000, includefoot,
+  left=3cm, right=1cm, top=2cm, bottom=2cm, headsep=1cm, footskip=1cm
+]{geometry}
+\usepackage[T2A]{fontenc}
+\usepackage[utf8x]{inputenc}
+\usepackage[english,russian]{babel}
+\usepackage{tabularx}           % таблицы
+
+% сокращения:
+\usepackage[intoc, russian]{nomencl}  
+\makenomenclature
+\renewcommand{\nomlabel}[1]{\hbox to 6cm{#1}} % делаем выравнивание и отступ
+\renewcommand{\nomname}{Перечень принятых в работе сокращений}
+
+
+\ifpdf\usepackage{epstopdf}\fi
+
+%% \usepackage{listings}           % вставка листингов кода
+%% \lstloadlanguages{[Sharp]C}     % загрузка используемых языков
+%% \lstset{tabsize=4,              % изменить настройки пакета: поменять размер табов (4 а не 8)
+%% commentstyle=\itshape,          % меняем стиль комментариев на италик
+%% frame=lines,                    % обрамлять листинг линиями сверху и снизу
+%% framesep=10pt, texcl,           % отступ до кода + комментарии в коде обрабатываются LaTeX
+%% aboveskip=15pt,belowskip=25pt}  % отступы до и после листинга
+
+\usepackage{amssymb}            % доп. матсимволы + <= в русском стиле
+\renewcommand{\ge}{\geqslant}   % <= по умолчанию русское
+\renewcommand{\le}{\leqslant}   % >= по умолчанию русское
+
+% Номера страниц сверху справа
+\def\headfont{\small}
+\pagestyle{headright}
+\chapterpagestyle{headright}
+
+% Использовать полужирное начертание для векторов
+\let\vec=\mathbf
+
+% Включать подсекции в оглавление
+\setcounter{tocdepth}{2}
+\usepackage{indentfirst}        % отступ у первого абзаца раздела
+%\numberwithin{equation}{section}% включать в номера формул номера разделов
+
+%\graphicspath{{fig/}}
+
+\newcommand{\todo}[1]{\marginpar{TODO: #1}}
+\usepackage{verbatim}
+\newenvironment{code}{\footnotesize\verbatim}{\endverbatim\normalsize}
+
+\begin{document}
+\include{title}
+\setcounter{page}{2}
+\tableofcontents
+%% \include{intro}
+\include{first}
+\include{second}
+\include{third}
+%% \include{concl}
+\cite{Narendra_1990}
+\cite{texbook}
+
+%% \bibliographystyle{plain}	% (uses file "plain.bst")
+\bibliographystyle{gost705}
+\bibliography{refs}
+\end{document}

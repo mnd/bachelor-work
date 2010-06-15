@@ -98,7 +98,7 @@ extractAndExecute vts exp = runQ $ foldr extractAndExecute' [| Just ($exp) |] (r
       return $ InfixE (Just (SigE (AppE fd var1) type1)) op (Just (LamE [VarP var2] (changeVar code var1 (VarE var2))))
          
 -- Проходится по дереву и заменяет вхождения v1 на v2
-changeVar code v1 v2 = everywhere (mkT (\v -> if v == v1 then v2 else v )) code
+changeVar code v1 v2 = everywhere (mkT $ \v -> if v == v1 then v2 else v) code
 
 data TestType = Static ExpQ | Dynamic ExpQ
 

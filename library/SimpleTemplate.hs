@@ -9,12 +9,15 @@ module SimpleTemplate (
 import DynamicGen
 import Unsafe.Coerce
 
+p1 :: Integer -> Double -> Double
+p1 = (+) . fromIntegral
+
 plus :: [Dynamic] -> Maybe Dynamic
 plus [a, b] = $(testsAndExecutesN [
                    ([('a, [t| Integer |]),
                      ('b, [t| Double |])],
                     Static [| True |],
-                    [| (unsafeCoerce (((+) . fromIntegral) :: Integer -> Double -> Double) :: (a -> b -> b)) a b |]),
+                    [| (unsafeCoerce p1 :: (a -> b -> b)) a b |]),
                    
                    ([('a, [t| Double |]),
                      ('b, [t| Double |])],
