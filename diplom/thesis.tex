@@ -1,7 +1,7 @@
-% -*- mode: LaTeX; mode: auto-fill; mode: flyspell; coding: utf-8; -*-
+% -*- mode: LaTeX; mode: auto-fill; mode: flyspell; coding: koi8-r; -*-
 \documentclass[14pt,a4paper,times,bachelor,
-    subf, href, fixint=false,
-    draft
+  subf, href, fixint=false,
+  %% draft
 ]{disser}
 
 \usepackage[
@@ -9,49 +9,82 @@
   left=3cm, right=1cm, top=2cm, bottom=2cm, headsep=1cm, footskip=1cm
 ]{geometry}
 \usepackage[T2A]{fontenc}
-\usepackage[utf8x]{inputenc}
 \usepackage[english,russian]{babel}
-\usepackage{tabularx}           % я┌п╟п╠п╩п╦я├я▀
+\usepackage[koi8-r]{inputenc}
+\usepackage{tabularx}           % таблицы
 
-% я│п╬п╨я─п╟я┴п╣п╫п╦я▐:
+% сокращения:
 \usepackage[intoc, russian]{nomencl}  
 \makenomenclature
-\renewcommand{\nomlabel}[1]{\hbox to 6cm{#1}} % п╢п╣п╩п╟п╣п╪ п╡я▀я─п╟п╡п╫п╦п╡п╟п╫п╦п╣ п╦ п╬я┌я│я┌я┐п©
-\renewcommand{\nomname}{п÷п╣я─п╣я┤п╣п╫я▄ п©я─п╦п╫я▐я┌я▀я┘ п╡ я─п╟п╠п╬я┌п╣ я│п╬п╨я─п╟я┴п╣п╫п╦п╧}
+\renewcommand{\nomlabel}[1]{\hbox to 6cm{#1}} % делаем выравнивание и отступ
+\renewcommand{\nomname}{Перечень принятых в работе сокращений}
 
 
 \ifpdf\usepackage{epstopdf}\fi
 
-%% \usepackage{listings}           % п╡я│я┌п╟п╡п╨п╟ п╩п╦я│я┌п╦п╫пЁп╬п╡ п╨п╬п╢п╟
-%% \lstloadlanguages{[Sharp]C}     % п╥п╟пЁя─я┐п╥п╨п╟ п╦я│п©п╬п╩я▄п╥я┐п╣п╪я▀я┘ я▐п╥я▀п╨п╬п╡
-%% \lstset{tabsize=4,              % п╦п╥п╪п╣п╫п╦я┌я▄ п╫п╟я│я┌я─п╬п╧п╨п╦ п©п╟п╨п╣я┌п╟: п©п╬п╪п╣п╫я▐я┌я▄ я─п╟п╥п╪п╣я─ я┌п╟п╠п╬п╡ (4 п╟ п╫п╣ 8)
-%% commentstyle=\itshape,          % п╪п╣п╫я▐п╣п╪ я│я┌п╦п╩я▄ п╨п╬п╪п╪п╣п╫я┌п╟я─п╦п╣п╡ п╫п╟ п╦я┌п╟п╩п╦п╨
-%% frame=lines,                    % п╬п╠я─п╟п╪п╩я▐я┌я▄ п╩п╦я│я┌п╦п╫пЁ п╩п╦п╫п╦я▐п╪п╦ я│п╡п╣я─я┘я┐ п╦ я│п╫п╦п╥я┐
-%% framesep=10pt, texcl,           % п╬я┌я│я┌я┐п© п╢п╬ п╨п╬п╢п╟ + п╨п╬п╪п╪п╣п╫я┌п╟я─п╦п╦ п╡ п╨п╬п╢п╣ п╬п╠я─п╟п╠п╟я┌я▀п╡п╟я▌я┌я│я▐ LaTeX
-%% aboveskip=15pt,belowskip=25pt}  % п╬я┌я│я┌я┐п©я▀ п╢п╬ п╦ п©п╬я│п╩п╣ п╩п╦я│я┌п╦п╫пЁп╟
+\usepackage{amssymb}            % доп. матсимволы + <= в русском стиле
+\renewcommand{\ge}{\geqslant}   % <= по умолчанию русское
+\renewcommand{\le}{\leqslant}   % >= по умолчанию русское
 
-\usepackage{amssymb}            % п╢п╬п©. п╪п╟я┌я│п╦п╪п╡п╬п╩я▀ + <= п╡ я─я┐я│я│п╨п╬п╪ я│я┌п╦п╩п╣
-\renewcommand{\ge}{\geqslant}   % <= п©п╬ я┐п╪п╬п╩я┤п╟п╫п╦я▌ я─я┐я│я│п╨п╬п╣
-\renewcommand{\le}{\leqslant}   % >= п©п╬ я┐п╪п╬п╩я┤п╟п╫п╦я▌ я─я┐я│я│п╨п╬п╣
-
-% п²п╬п╪п╣я─п╟ я│я┌я─п╟п╫п╦я├ я│п╡п╣я─я┘я┐ я│п©я─п╟п╡п╟
+% Номера страниц сверху справа
 \def\headfont{\small}
 \pagestyle{headright}
 \chapterpagestyle{headright}
 
-% п≤я│п©п╬п╩я▄п╥п╬п╡п╟я┌я▄ п©п╬п╩я┐п╤п╦я─п╫п╬п╣ п╫п╟я┤п╣я─я┌п╟п╫п╦п╣ п╢п╩я▐ п╡п╣п╨я┌п╬я─п╬п╡
+% Использовать полужирное начертание для векторов
 \let\vec=\mathbf
 
-% п▓п╨п╩я▌я┤п╟я┌я▄ п©п╬п╢я│п╣п╨я├п╦п╦ п╡ п╬пЁп╩п╟п╡п╩п╣п╫п╦п╣
+% Включать подсекции в оглавление
 \setcounter{tocdepth}{2}
-\usepackage{indentfirst}        % п╬я┌я│я┌я┐п© я┐ п©п╣я─п╡п╬пЁп╬ п╟п╠п╥п╟я├п╟ я─п╟п╥п╢п╣п╩п╟
-%\numberwithin{equation}{section}% п╡п╨п╩я▌я┤п╟я┌я▄ п╡ п╫п╬п╪п╣я─п╟ я└п╬я─п╪я┐п╩ п╫п╬п╪п╣я─п╟ я─п╟п╥п╢п╣п╩п╬п╡
+\usepackage{indentfirst}        % отступ у первого абзаца раздела
+%\numberwithin{equation}{section}% включать в номера формул номера разделов
 
 %\graphicspath{{fig/}}
 
 \newcommand{\todo}[1]{\marginpar{TODO: #1}}
-\usepackage{verbatim}
-\newenvironment{code}{\footnotesize\verbatim}{\endverbatim\normalsize}
+
+\usepackage{listings}
+\lstnewenvironment{code}{\singlespacing
+  \lstset{
+    language=Haskell,
+    commentstyle=\itshape,          % меняем стиль комментариев на италик
+    frame=lines, % обрамлять листинг линиями сверху и снизу
+    framesep=10pt, texcl, % отступ до кода
+                          % + комментарии в коде обрабатываются LaTeX
+    aboveskip=15pt,belowskip=15pt,  % отступы до и после листинга
+    basicstyle=\small,
+    columns=fullflexible
+  }
+}{\onehalfspacing}
+
+%% \usepackage{listings}
+%% \lstloadlanguages{Haskell}
+%% \lstnewenvironment{code}
+%%     {\singlespacing\lstset{}%
+%%       \csname lst@SetFirstLabel\endcsname}
+%%     {\onehalfspacing\csname lst@SaveFirstLabel\endcsname}
+%%     \lstset{
+%%       language=Haskell,
+%%       commentstyle=\itshape,          % меняем стиль комментариев на италик
+%%       frame=lines, % обрамлять листинг линиями сверху и снизу
+%%       framesep=10pt, texcl, % отступ до кода + комментарии в коде обрабатываются LaTeX
+%%       aboveskip=15pt,belowskip=15pt,  % отступы до и после листинга
+%%       columns=fullflexible,
+%%       basicstyle=\small\ttfamily,
+%%       flexiblecolumns=false,
+%%       basewidth={0.5em,0.45em},
+%%       literate={+}{{$+$}}1 {/}{{$/$}}1 {*}{{$*$}}1 {=}{{$=$}}1
+%%                {>}{{$>$}}1 {<}{{$<$}}1 {\\}{{$\lambda$}}1
+%%                {\\\\}{{\char`\\\char`\\}}1
+%%                {->}{{$\rightarrow$}}2 {>=}{{$\geq$}}2 {<-}{{$\leftarrow$}}2
+%%                {<=}{{$\leq$}}2 {=>}{{$\Rightarrow$}}2 
+%%                {\ .}{{$\circ$}}2 {\ .\ }{{$\circ$}}2
+%%                {>>}{{>>}}2 {>>=}{{>>=}}2
+%%                {|}{{$\mid$}}1               
+%%     }
+
+%% \usepackage{verbatim}
+%% \newenvironment{code}{\footnotesize\verbatim}{\endverbatim\normalsize}
 
 \begin{document}
 \include{title}
@@ -62,10 +95,9 @@
 \include{second}
 \include{third}
 %% \include{concl}
-\cite{Narendra_1990}
+
 \cite{texbook}
 
-%% \bibliographystyle{plain}	% (uses file "plain.bst")
 \bibliographystyle{gost705}
 \bibliography{refs}
 \end{document}

@@ -5,11 +5,12 @@ all: thesis.tex title.tex first.tex second.tex third.tex refs.bib
 	latex thesis
 
 clean:
-	rm *.pdf
-	rm *.log
-	rm *.aux
-	rm *~
-	rm *.bbl
-	rm *.blg
-	rm *.nlo
-	rm *.toc
+	# rm -f *.pdf
+	# rm -f *.dvi
+	rm -f *.log
+	rm -f *.aux
+	rm -f *~
+	rm -f *.bbl
+	rm -f *.blg
+	rm -f *.nlo
+	rm -f *.toc
