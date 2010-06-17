@@ -90,6 +90,13 @@ import1 = do{ try (string "import")
             ; return ("import" ++ s)
             }
           
+-- "type haskell code ;" -> type haskell code
+type1 :: Parser String
+type1 = do{ try (string "type")
+            ; s <- fmap trimTail (beforeWord ";")
+            ; return ("type" ++ s)
+            }
+
 -- Read and return "import haskell code when"
 module1 :: Parser String
 module1 = do{ try (string "module")
@@ -214,37 +221,39 @@ function = do{ def <- definition
            where
              emptyWhen = Static "True"
 
-data Program = Program String {- modules + imports -} [Typedef] [Function]
+data Program = Program String {- modules + imports -} String {- types -} [Typedef] [Function]
 
 -- merge two tokens
 merge :: Program -> Program -> Program
-merge (Program s1 t1 f1) (Program s2 t2 f2) = (Program sr tr fr)
+merge (Program s1 st1 t1 f1) (Program s2 st2 t2 f2) = (Program sr str tr fr)
   where
-    sr = s1 ++ ('\n':s2)
-    tr = t1 ++ t2
-    fr = f1 ++ f2   
+    sr  = s1 ++ ('\n':s2)
+    str = st1 ++ ('\n':st2)
+    tr  = t1 ++ t2
+    fr  = f1 ++ f2   
 
 -- Parse programm blocks. module, import, typedefs and functions
 program :: Parser Program
-program = do{ t <- ((module1      >>= \x -> return $ Program x  []  [])
-                    <|> (import1  >>= \x -> return $ Program x  []  [])
-                    <|> (typedef  >>= \x -> return $ Program "" [x] [])
-                    <|> (function >>= \x -> return $ Program "" []  x))
+program = do{ t <- ((module1      >>= \x -> return $ Program x  "" []  [])
+                    <|> (import1  >>= \x -> return $ Program x  "" []  [])
+                    <|> (typedef  >>= \x -> return $ Program "" "" [x] [])
+                    <|> (type1    >>= \x -> return $ Program "" x  []  [])
+                    <|> (function >>= \x -> return $ Program "" "" []  x))
             ; many sn
             ; do{ ts <- program
                 ; return (merge t ts)
                 }
               <|> return t
             }
-          <|> return (Program ""  [] [])
+          <|> return (Program "" "" [] [])
 
 -- Root rule. Allow to write optional block in pure haskell before "\n%%", and only after this start to parse generic programm
 code :: Parser Program
 code = do{ many sn
          ; do { hc <- try(beforeWord "\n%%")
               ; many sn
-              ; (Program s t f) <- program
-              ; return $ Program (hc ++ "\n\n" ++ s) t f
+              ; (Program s st t f) <- program
+              ; return $ Program (hc ++ "\n\n" ++ s) st t f
               }
            <|> do { p <- program
                   ; return p
@@ -255,7 +264,7 @@ code = do{ many sn
 
 -- Code generation
 generate :: Program -> String
-generate (Program s t f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ (unlines $ genFunctions f')
+generate (Program s st t f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ st ++ "\n" ++ (unlines $ genFunctions f')
                         ++ "\n" ++ (genSymbolTable f) ++ "\n" ++ (genRead fr) ++ "\n" ++ (genShow fs)
   where
     f1 = untypes t f
@@ -428,6 +437,8 @@ main = do
 >'module' haskell module code 'where'
 
 >'import' haskell import code SPACES ';'
+
+>'type' haskell type code SPACES ';'
 
 >'typedef' name '=' '[' List ',' Of ',' Types ']' ';'
 

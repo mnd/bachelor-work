@@ -18,6 +18,8 @@
 \makenomenclature
 \renewcommand{\nomlabel}[1]{\hbox to 6cm{#1}} % делаем выравнивание и отступ
 \renewcommand{\nomname}{Перечень принятых в работе сокращений}
+\makeatletter
+\renewcommand\theappendix{\@arabic\c@chapter}
 
 
 \ifpdf\usepackage{epstopdf}\fi
@@ -83,21 +85,23 @@
 %%                {|}{{$\mid$}}1               
 %%     }
 
-%% \usepackage{verbatim}
-%% \newenvironment{code}{\footnotesize\verbatim}{\endverbatim\normalsize}
+\usepackage{verbatim}
+\newenvironment{appix}{\singlespacing\footnotesize\verbatim}{\endverbatim\normalsize\onehalfspacing}
 
 \begin{document}
 \include{title}
 \setcounter{page}{2}
+\include{refer}
 \tableofcontents
-%% \include{intro}
+\include{intro}
 \include{first}
 \include{second}
 \include{third}
-%% \include{concl}
+\include{concl}
 
-\cite{texbook}
-
+\nocite{*}
 \bibliographystyle{gost705}
 \bibliography{refs}
+
+\include{appendix}
 \end{document}

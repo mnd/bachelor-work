@@ -33,7 +33,8 @@ module DynamicFace (
   -- -> Maybe Dynamic
   eval,                          -- Get result of eval of (functionName, [(ArgRepr, ArgType)]) by symbol table and read table
   repl,
-  ProgramData (PD, SPD),
+  ProgramData (PD),
+  defaultPD,
   readInput,
   symbolTable,
   readTable,
@@ -262,29 +263,31 @@ data ProgramData =
        showTable :: ShowTable,
        importModules :: [(String, (SymbolTable, ReadTable, ShowTable))]
      }
-  |
-  SPD { symbolTable :: SymbolTable,
-        readTable :: ReadTable,
-        showTable :: ShowTable,
-        importModules :: [(String, (SymbolTable, ReadTable, ShowTable))]
-      }
-                   
+
+defaultPD :: ProgramData
+defaultPD = PD getLine [] [] [] []
 
 repl :: ProgramData -> IO ()
-repl (SPD st rt sht is) = repl (PD getLine st rt sht is)
 repl pd = readInput pd >>= \s1 ->
   case words s1 of
     ("quit"):_ -> return ()
+    ("clear"):_ -> do
+      putStrLn "==> cleared"
+      repl pd {
+        symbolTable = [],
+        readTable = [],
+        showTable =[]
+        }
     ("import"):name:_ -> case lookup name (importModules pd) of
       Just (st, rt, sht) -> do
-        putStrLn "imported"
+        putStrLn "==> imported"
         repl pd {
           symbolTable = symbolTable pd `stplus` st,
           readTable   = readTable pd `rtplus` rt,
           showTable   = showTable pd `shtplus` sht
           }
       Nothing -> do
-        putStrLn "module not found"
+        putStrLn "==> module not found"
         repl pd
     l -> let s' = do
                cmd <- parseString (unwords l)
@@ -293,7 +296,7 @@ repl pd = readInput pd >>= \s1 ->
                getShow (showTable pd) res
          in do
           case s' of
-            Just s -> putStrLn s
-            Nothing -> putStrLn "can't parse input"
+            Just s -> putStrLn $ "==> " ++ s
+            Nothing -> putStrLn "==> can't parse input"
           repl pd
 

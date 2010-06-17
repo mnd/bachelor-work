@@ -1,0 +1,1138 @@
+% -*- mode: LaTeX; mode: auto-fill; mode: flyspell; coding: koi8-r; -*-
+\appendix
+\chapter{process.hs}
+
+\begin{appix}
+import Data.Char
+import Data.List
+import Text.ParserCombinators.Parsec
+import Text.ParserCombinators.Parsec.Token
+
+-----Helping Functions-------------------------
+spaceSymbol :: Char -> Bool
+spaceSymbol ' '  = True
+spaceSymbol '\n' = True
+spaceSymbol '\t' = True
+spaceSymbol c    = False
+
+trimHead :: String -> String
+trimHead = dropWhile spaceSymbol
+
+trimTail :: String -> String
+trimTail = reverse . trimHead . reverse
+
+trim :: String -> String
+trim s = trimTail $ trimHead s
+
+----------Grammar--------------------------------
+word :: Parser String
+word = many1 (alphaNum <|> oneOf "_'." <?> "") <?> "word"
+
+-- space symbols
+sn = (space <|> newline <|> tab)
+
+-- world list with sn as delimeter
+wordList :: Parser [String]
+wordList = do{ s1 <- word
+          ; many sn
+          ; do { s2 <- wordList
+               ; return (s1:s2)
+               }
+            <|> return [s1]
+          }
+
+-- read string before closing ". And we think that openinig " was early.
+quotedString :: Parser String
+quotedString = do{ char '\\'
+                 ; c1 <- anyChar
+                 ; s <- quotedString
+                 ; return ('\\':c1:s)
+                 }
+               <|> do { char '"'
+                      ; return ""
+                      }
+               <|> do { c2 <- anyChar
+                      ; s <- quotedString
+                      ; return (c2:s)
+                      }
+
+-- Read all text before string "s". Inside ( ... ), [ ... ], { ... } and " ... " blocks text does not seek
+beforeWord :: String -> Parser String
+beforeWord s = do { try (string s)
+                  ; return ""
+                  }
+               <|> do { c <- anyChar
+                      ; (case c of
+                            -- '\'' -> do{ s0 <- beforeWord "'"
+                            --          ; s0' <- beforeWord s
+                            --          ; return ((c:s0) ++ ('\'':s0'))
+                            --          }
+                            '(' -> do{ s1 <- beforeWord ")"
+                                     ; s1' <- beforeWord s
+                                     ; return ((c:s1) ++ (')':s1'))
+                                     }
+                            '{' -> do{ s2 <- beforeWord "}"
+                                     ; s2' <- beforeWord s
+                                     ; return ((c:s2) ++ ('}':s2'))
+                                     }
+                            '[' -> do{ s2 <- beforeWord "]"
+                                     ; s2' <- beforeWord s
+                                     ; return ((c:s2) ++ (']':s2'))
+                                     }
+                            '"' -> do{ s2 <- quotedString
+                                     ; s2' <- beforeWord s
+                                     ; return ((c:s2) ++ ('"':s2'))
+                                     }
+                            _  -> do{ s3 <- beforeWord s
+                                    ; return (c:s3)
+                                    })
+                         }
+
+-- "import haskell code SPACES ;" -> import haskell code
+import1 :: Parser String
+import1 = do{ try (string "import")
+            ; s <- fmap trimTail (beforeWord ";")
+            ; return ("import" ++ s)
+            }
+          
+-- "type haskell code ;" -> type haskell code
+type1 :: Parser String
+type1 = do{ try (string "type")
+            ; s <- fmap trimTail (beforeWord ";")
+            ; return ("type" ++ s)
+            }
+
+-- Read and return "import haskell code when"
+module1 :: Parser String
+module1 = do{ try (string "module")
+            ; s <- beforeWord "where"
+            ; return ("module" ++ s ++ "where")
+            }
+
+-- list of words separated by commas.
+list :: Parser [String]
+list = do{ t <- fmap unwords wordList
+             ; many sn
+             ; do{ char ','
+                 ; many sn
+                 ; ts <- list
+                 ; return (t:ts)
+                 }
+               <|> return [t]
+             }
+
+type Typedef = (String, [String])
+-- Parse "typedef name = [ types ]" block and return pair (name, [types])
+typedef :: Parser Typedef
+typedef = do{ try (string "typedef")
+            ; many1 sn
+            ; name <- word
+            ; many sn
+            ; char '='
+            ; many sn
+            ; char '['
+            ; many sn
+            ; tl <- list
+            ; many sn
+            ; char ']'
+            ; many sn
+            ; char ';'
+            ; return (name, tl)
+            }
+
+            
+type TypeName = (String, String)
+-- Transform ["Maybe", "Bool", "name"] list in pair ("Maybe Bool", "name") 
+typeNameParse :: [String] -> TypeName
+typeNameParse x = (unwords (init x), last x)
+
+-- Parse function arguments list. 
+funArgs :: Parser [TypeName]
+funArgs = do{ a <- fmap typeNameParse wordList
+            ; do{ char ','
+                ; many sn
+                ; as <- funArgs
+                ; return (a:as)
+                }
+              <|> return [a]
+            }
+
+-- parse function definition "Type name (types with args)"
+definition :: Parser FunDef
+definition = do{ ftn <- fmap typeNameParse wordList
+               ; many sn
+               ; char '('
+               ; many sn
+               ; fargs <- funArgs
+               ; many sn
+               ; char ')'
+               ; return (ftn,fargs) -- ((type, name):[(type, argname)])
+               }
+
+data When = Static String | Dynamic String
+          deriving Show
+-- Parse 'when' block
+whenDefinition :: Parser When
+whenDefinition = do{ try (string "when")
+                   ; many sn
+                   ; do{ char '{'
+                       ; pred <- fmap (Static . trim) (beforeWord "}")
+                       ; return pred
+                       }
+                     <|>
+                     do{ char '('
+                       ; pred <- fmap (Dynamic . trim) (beforeWord ")")
+                       ; return pred
+                       }
+                   }
+
+-- parse function body
+bodyDefinition :: Parser String
+bodyDefinition = do { char '{'
+                    ; body <- fmap trim (beforeWord "}")
+                    ; return body
+                    }
+
+type FunDef = (TypeName,[TypeName])
+data Function = Function {
+  funDef :: FunDef,
+  whenDef :: When,
+  bodyDef :: String
+  }
+
+  
+-- Parse whole function: Several definitions with optional blocks 'when' and body of the function
+function :: Parser [Function]
+function = do{ def <- definition
+             ; many sn
+             ; do{ body <- bodyDefinition
+                 ; return [Function def emptyWhen body]
+                 }
+               <|> do{ when <- whenDefinition
+                     ; many sn
+                     ; do{ body <- bodyDefinition
+                         ; return [Function def when body]
+                         }
+                       <|> do{ fun <- function
+                             ; let body = (\(Function _ _ b) -> b) $ head fun
+                             ; return ((Function def when body):fun)
+                             }
+                     }
+               <|> do{ fun <- function
+                     ; let body = (\(Function _ _ b) -> b) $ head fun
+                     ; return ((Function def emptyWhen body):fun)
+                     }
+             }
+           where
+             emptyWhen = Static "True"
+
+data Program = Program String {- modules + imports -} String {- types -} [Typedef] [Function]
+
+-- merge two tokens
+merge :: Program -> Program -> Program
+merge (Program s1 st1 t1 f1) (Program s2 st2 t2 f2) = (Program sr str tr fr)
+  where
+    sr  = s1 ++ ('\n':s2)
+    str = st1 ++ ('\n':st2)
+    tr  = t1 ++ t2
+    fr  = f1 ++ f2   
+
+-- Parse programm blocks. module, import, typedefs and functions
+program :: Parser Program
+program = do{ t <- ((module1      >>= \x -> return $ Program x  "" []  [])
+                    <|> (import1  >>= \x -> return $ Program x  "" []  [])
+                    <|> (typedef  >>= \x -> return $ Program "" "" [x] [])
+                    <|> (type1    >>= \x -> return $ Program "" x  []  [])
+                    <|> (function >>= \x -> return $ Program "" "" []  x))
+            ; many sn
+            ; do{ ts <- program
+                ; return (merge t ts)
+                }
+              <|> return t
+            }
+          <|> return (Program "" "" [] [])
+
+-- Root rule. Allow to write optional block in pure haskell before "\n%%", and only after this start to parse generic programm
+code :: Parser Program
+code = do{ many sn
+         ; do { hc <- try(beforeWord "\n%%")
+              ; many sn
+              ; (Program s st t f) <- program
+              ; return $ Program (hc ++ "\n\n" ++ s) st t f
+              }
+           <|> do { p <- program
+                  ; return p
+                  }
+         }
+
+--------------------- And of grammar. Processing -------------------------------------
+
+-- Code generation
+generate :: Program -> String
+generate (Program s st t f) = s ++ "\n" ++ restrictedModules ++ "\n" ++ st ++ "\n" ++ (unlines $ genFunctions f')
+                        ++ "\n" ++ (genSymbolTable f) ++ "\n" ++ (genRead fr) ++ "\n" ++ (genShow fs)
+  where
+    f1 = untypes t f
+    (fr, f2) = partition (((==) "read") . funName) f1
+    (fs, f') = partition (((==) "show") . funName) f2
+    
+-- Restricted modules
+restrictedModules = unlines ["import Data.Typeable", "import Data.Dynamic", "import Data.Maybe", "import Monad"]
+
+-- expand types defined by typedef
+untypes :: [Typedef] -> [Function] -> [Function]
+untypes ts fs = concatMap untypes' fs
+  where
+    -- (TypeName,[TypeName])
+    untypes' func@ (Function ((nt, nn), as) w b) =
+      case lookup nt ts of
+        Nothing -> untypesArgs func
+        Just types -> concatMap (\t -> untypesArgs (Function ((t, nn), as) w b)) types
+
+    -- Change type of num'th argument function func to newType
+    untNArg func@(Function (n,as) w b) newType num =
+      let an = snd $ as !! num
+      in Function (n, changeN as (newType, an) num) w b
+    
+    untypesArgs func@ (Function (_,as) _ _)   = untypesArgs' func (length as)
+      where
+        untypesArgs' func 0 = [func]
+        untypesArgs' func@ (Function (n,as) w b) inum =
+          let num = inum - 1
+              at  = fst (as !! num)
+              an  = snd (as !! num)
+          in
+           case lookup at ts of
+             Nothing -> untypesArgs' func num
+             Just types -> concatMap (\t -> untypesArgs' (untNArg func t num) num) types
+                                                 
+
+-- replace n'th of the list with t
+changeN :: [a] -> a -> Int -> [a]
+changeN ls t n | 0 <= n && n < length ls = (take n ls) ++ [t] ++ (drop (n+1) ls)
+               | otherwise               = ls
+
+-- Extract Data from Function
+funTypeName :: Function -> (String, String)
+funTypeName = fst . funDef
+funName :: Function -> String
+funName = snd . funTypeName
+funType :: Function -> String
+funType = fst . funTypeName
+
+funTypesArgs :: Function -> [TypeName]
+funTypesArgs = snd . funDef
+
+genFun :: [Function] -> String
+genFun funs@ (f:fs) = let fname          = funName f
+                          header         = fname ++ " :: [Dynamic] -> Maybe Dynamic\n"
+                          testAndBody    = unlines $ genTestAndBody funs
+                          defaultWay     = fname ++ " _ = Nothing"
+                      in header ++ "\n" ++ testAndBody ++ "\n" ++ defaultWay
+
+genRead :: [Function] -> String
+genRead fs = let as   = map (snd . head . funTypesArgs) fs
+                 bs   = map bodyDef fs
+                 ts   = map funType fs
+                 defs = zipWith3 (\a b t -> "(" ++ (show t) ++ ", (\\" ++ a ++ " -> toDyn ((" ++ b ++ ") :: (" ++ t ++ "))))") as bs ts
+               in "readTable :: [(String, (String -> Dynamic))]\n" ++ "readTable = [" ++ (intercalate ", " defs) ++ "]"
+
+genShow :: [Function] -> String
+genShow fs = let an = "someNeverUnuseableName"
+                 tas  = map (head . funTypesArgs) fs
+                 bs   = map bodyDef fs
+                 defs = zipWith (\(t, a) b -> "((typeOf (undefined :: (" ++ t ++ "))), (\\" ++ an
+                                              ++ " -> ((fromDynamic (" ++ an ++ ") :: (Maybe (" ++ t ++ "))) >>= \\" ++ a
+                                              ++ " -> return (\"(\" ++ (" ++ b ++ ") ++ \" :: " ++ t ++ ")\"))))") tas bs
+             in "showTable :: [(TypeRep, (Dynamic -> Maybe String))]\n" ++ "showTable = [" ++ (intercalate ", " defs) ++ "]"
+
+genArgs :: Function -> [String]
+genArgs f = map snd (funTypesArgs f)
+
+genTestAndBody :: [Function] -> [String]
+genTestAndBody []        = []
+genTestAndBody (f:fs) = let s = (funName f) ++ " [" ++ (intercalate ", " (genArgs f)) ++ "]"
+                                ++ " | " ++ (intercalate " && " (genTests f))
+                                ++ " && " ++ (genWhen f) ++ " = " ++ (genBody f)
+                             in s : (genTestAndBody fs)
+
+genTests :: Function -> [String]
+genTests f = genTests' $ funTypesArgs f
+  where
+    genTests' :: [(String, String)] {- [(Type, Name)] -} -> [String]
+    genTests' [] = []
+    genTests' (d:ds) = let test = "((dynTypeRep " ++ (snd d) ++ ") == (typeOf (undefined :: " ++ (fst d) ++ ")))"
+                       in test : (genTests' ds)
+
+-- Extract args from Dynamic. Get list [(Type, Name)]
+genExtactArgs ::  [(String, String)] {- [(Type, Name)] -} -> String
+genExtactArgs [] = []
+genExtactArgs (d:ds) = "((fromDynamic " ++ (snd d) ++ ") :: Maybe " ++ (fst d) ++ ")"
+                       ++ " >>= \\" ++ (snd d) ++ " -> " ++ (genExtactArgs ds)
+
+
+genWhen :: Function -> String
+genWhen f = "((" ++ extractingArgs when
+            ++ "return (" ++ (genWhen' when) ++")) == Just True)"
+  where
+    when = whenDef f
+    fargs = funTypesArgs f
+    genWhen' (Static when)  = when
+    genWhen' (Dynamic when) = "(fromJust . (fromDynamic :: Dynamic -> Maybe Bool)) (" ++ when ++ ")"
+    extractingArgs (Static _) = genExtactArgs $ funTypesArgs f
+    extractingArgs (Dynamic _) = ""
+
+genBody :: Function -> String
+genBody f = "(" ++ (genExtactArgs $ funTypesArgs f) ++ "return $ toDyn "
+            ++ "((" ++ (bodyDef f) ++ ") :: " ++ (funType f) ++ "))"
+
+-- generate function defenitions from Function structs
+genFunctions :: [Function] -> [String]
+genFunctions [] = []
+genFunctions funs@ (f:fs) =
+  let name = funName f
+      (fdefs, others) = partition (((==) name) . funName) funs
+  in if name `notElem` registredNames then 
+       (genFun fdefs) : (genFunctions others)
+     else
+       genFunctions others
+   
+   
+genSymbolTable :: [Function] -> String
+genSymbolTable funs = let fs = filter ((flip notElem registredNames) . funName) funs
+                          fnames = nub $ map funName fs
+                          fnt = map (\a -> "(" ++ (show a) ++ ", " ++ a ++ ")") fnames
+                      in  "symbolTable :: [(String, ([Dynamic] -> Maybe Dynamic))]"
+                          ++ "\n" ++ "symbolTable = [" ++ (intercalate ", " fnt) ++ "]"
+
+registredNames :: [String]
+registredNames = ["read", "show", "symbolTable", "readTable"]
+
+--------------------- End of processing. Using: runFile code "dynamic.gen" >>= return . generate --------------------------------
+--------------------------------------------- give to function "generate" output of parser "code" --------------------------------------
+
+run p input = 
+  case (parse p "" input) of
+    Left err -> error ("parse error at " ++ show err)
+    Right x  -> x
+
+main = do
+  text <- getContents
+  putStrLn $ generate $ run code text
+
+
+{- На вход программа может получать два типа ввода.
+
+>Some Many Lines Haskell Code
+>For example module define or some imports
+>
+>%%
+>
+>program code
+
+Либо просто
+
+>program code
+
+В первом случае разбивка хаскель кода и кода на нашем миниязыке
+происходит при нахождении строки "\n%%" и всё дальнейшее является
+кодом нашей программы. "programm code" может содержать произвольное
+количество следующих блоков:
+
+>'module' haskell module code 'where'
+
+>'import' haskell import code SPACES ';'
+
+>'type' haskell type code SPACES ';'
+
+>'typedef' name '=' '[' List ',' Of ',' Types ']' ';'
+
+>name '(' arg1name ',' arg2Name ',' argNName ')' ';'
+
+>ResultType functionName   '(' Arg1Type  arg1Name ',' Arg2Type  arg2Name ',' argNType  argNName ')' 'when' '{' some haskell code '}'
+>Result1Type function1Name '(' Arg1Type1 arg1Name ',' Arg2Type1 arg2Name ',' argNType1 argNName ')' 'when' '(' some haskell code ')'
+>'{'
+>   some haskell code
+>'}'
+
+Где "some haskell code" вставляется с обрезанием начальных и хвостовых
+пробельных символов в код. Перед кодом тела функции возможно
+произвольное число заголовков как с блоком "when", так и без него. Для
+всех этих заголовков будет подставлено одинаковое тело. 
+
+В блоке "when ( ... )" доступны только динамические переменные. А в
+блоках "when { ... }" и "{ body }" только статические
+
+Код в блоке "when" получает аргументы реальных типов и должен
+возвращать "Bool". Если вы хотите использовать вместо этого
+динамическую функцию, которая возвращает завернутый в "Dynamic" тип
+"Bool", то вам необходимо использовать круглые скобки, вместо
+фигурных.
+
+При использовании в качестве типа аргумента или типа возвращаемого
+значения имени "name", определенного при помощи ключевого слова
+"typedef", определение функции будет развернуто в ряд определений, в
+каждом из которых вместо "name" будет подставлен один из типов
+указаных в списке в правой части "typedef"
+
+Функции с именами symbolTable и readTable игнорируются. 
+
+Функции с именем read (к сожалению без ряда проверок) интерпретируются
+как функции
+> Type read (String arg) { Body }
+То есть блок when игнорируется, все аргументы кроме первого
+игнорируются, тип аргумента игнорируется и считается типом String. 
+
+Функции read генерируют структуру readTable вида 
+> readTable = [("Type", \arg -> toDyn ((Body) :: Type)), ... ]
+Которая используется для считывания считывания строки.
+
+Добавлена showTable аналогичная readTalbe. Целесообразность сомнительна, так что возможно стоит её удалить.
+
+-}
+\end{appix} %$
+
+\chapter{DynamicGen.hs}
+
+\begin{appix}
+{-# LANGUAGE TemplateHaskell #-}
+module DynamicGen
+       (
+         module Data.Dynamic,
+         -- Создаёт проверку типа по переменной типа Dynamic и её типу
+         checkType, --  (Quasi m) => ExpQ -> TypeQ -> m Exp
+         -- Создаёт проверку типов по списку пар (переменная, тип)
+         checkTypes, --  (Quasi m) => [(ExpQ, TypeQ)] -> m Exp
+         -- Извлекает ряд значений из динамиков и их типов и заменяет в коде exp переменные на извлечённые
+         extractAndExecute, --  (Quasi m) => [(ExpQ, TypeQ)] -> ExpQ -> m Exp
+         TestType (Static, Dynamic),
+         -- Получает на вход набор переменных с типами, тест и код на случай успеха. Возвращает Just Result или Nothing
+         testAndExecute, --  (Quasi m) => [(ExpQ, TypeQ)] -> TestType -> ExpQ -> m Exp
+         -- Аналогичная предыдущей, только работает со списком таких параметров
+         testsAndExecutes, --  (Quasi m) => [([(ExpQ, TypeQ)], TestType, ExpQ)] -> m Exp
+         -- Аналогичны предыдущим, только без теста
+         typeAndExecute, --  (Quasi m) => [(ExpQ, TypeQ)] -> ExpQ -> m Exp
+         typesAndExecutes, --  (Quasi m) => [([(ExpQ, TypeQ)], ExpQ)] -> m Exp
+         -- То же самое, но с указанием типа результата
+         testAndExecute', --  (Quasi m) => [(ExpQ, TypeQ)] -> TestType -> ExpQ -> TypeQ -> m Exp
+         testsAndExecutes', --  (Quasi m) => [([(ExpQ, TypeQ)], TestType, ExpQ, TypeQ)] -> m Exp
+         typeAndExecute', --  (Quasi m) => [(ExpQ, TypeQ)] -> ExpQ -> TypeQ -> m Exp
+         typesAndExecutes', --  (Quasi m) => [([(ExpQ, TypeQ)], ExpQ, TypeQ)] -> m Exp
+         
+         -- Блок аналогичных функций, но получающих на вход имена переменных в виде 'var
+         testAndExecuteNT, --  (Quasi m) => [(Name, Name)] -> TestType -> ExpQ -> m Exp
+         testsAndExecutesNT, --  (Quasi m) => [([(Name, Name)], TestType, ExpQ)] -> m Exp
+         typeAndExecuteNT, --  (Quasi m) => [(Name, Name)] -> ExpQ -> m Exp
+         typesAndExecutesNT, --  (Quasi m) => [([(Name, Name)], ExpQ)] -> m Exp
+         testAndExecuteNT', --  (Quasi m) => [(Name, Name)] -> TestType -> ExpQ -> Name -> m Exp
+         testsAndExecutesNT', --  (Quasi m) => [([(Name, Name)], TestType, ExpQ, Name)] -> m Exp
+         typeAndExecuteNT', --  (Quasi m) => [(Name, Name)] -> ExpQ -> Name -> m Exp
+         typesAndExecutesNT', --  (Quasi m) => [([(Name, Name)], ExpQ, Name)] -> m Exp
+         
+         
+         -- Блок аналогичных функций, но получающих на вход имена переменных и типы в виде 'var ''Type
+         testAndExecuteN, --  (Quasi m) => [(Name, TypeQ)] -> TestType -> ExpQ -> m Exp
+         testsAndExecutesN, --  (Quasi m) => [([(Name, TypeQ)], TestType, ExpQ)] -> m Exp
+         typeAndExecuteN, --  (Quasi m) => [(Name, TypeQ)] -> ExpQ -> m Exp
+         typesAndExecutesN, --  (Quasi m) => [([(Name, TypeQ)], ExpQ)] -> m Exp
+         testAndExecuteN', --  (Quasi m) => [(Name, TypeQ)] -> TestType -> ExpQ -> TypeQ -> m Exp
+         testsAndExecutesN', --  (Quasi m) => [([(Name, TypeQ)], TestType, ExpQ, TypeQ)] -> m Exp
+         typeAndExecuteN', --  (Quasi m) => [(Name, TypeQ)] -> ExpQ -> TypeQ -> m Exp
+         typesAndExecutesN', --  (Quasi m) => [([(Name, TypeQ)], ExpQ, TypeQ)] -> m Exp
+
+         
+         -- генерация таблицы символов
+         genSymbolTable, --  (Quasi m) => [(String, ExpQ)] -> m [Dec]
+         -- аналогично, но пытается сама определить имя
+         genSymbolTable', --  (Quasi m) => [ExpQ] -> m [Dec]
+         -- генерация таблицы чтений 
+         genReadTable, --  (Quasi m) => [(String, ExpQ, TypeQ)] -> m [Dec]
+         -- аналогично, но пытается сама определить имя
+         genReadTable', --  (Quasi m) => [(ExpQ, TypeQ)] -> m [Dec]
+         -- генерирация таблицы отображений
+         genShowTable, --  (Quasi m) => [(TypeQ, String, ExpQ)] -> m [Dec]
+         -- аналогично но получает имя типа
+         genShowTable', --  (Quasi m) => [(Name, String, ExpQ)] -> m [Dec]
+         -- аналогично, но пытается сама определить имя
+         genShowTable'', --  (Quasi m) => [(TypeQ, ExpQ)] -> m [Dec]
+         -- генерирует сразу и readTable и showTable
+         genReadShowTable, --  (Quasi m) => [(TypeQ, String, ExpQ, ExpQ)] -> m [Dec]
+         -- аналогично но получает имя типа
+         genReadShowTable', --  (Quasi m) => [(Name, String, ExpQ, ExpQ)] -> m [Dec]
+         -- Аналогично, но сама подбирает имя
+         genReadShowTable'', --  (Quasi m) => [(TypeQ, ExpQ, ExpQ)] -> m [Dec]
+         
+       )
+       where
+
+import Language.Haskell.TH
+import Language.Haskell.TH.Syntax
+import Data.Typeable
+import Data.Dynamic
+import Data.Generics
+import Control.Monad
+
+-- Создаёт проверку типа по переменной типа Dynamic и её типу
+checkType :: (Quasi m) => ExpQ -> TypeQ -> m Exp
+checkType v t = runQ [| (dynTypeRep $v) == typeOf (undefined :: $t) |]
+
+-- Создаёт проверку типов по списку пар (переменная, тип)
+checkTypes :: (Quasi m) => [(ExpQ, TypeQ)] -> m Exp
+checkTypes [] = runQ [| True |]
+checkTypes [(v,t)] = checkType v t
+checkTypes vts =
+  let ((v,t):vts') = reverse vts
+      appendRule (v,t) exp = [| $(checkType v t) && $exp |]
+  in runQ $ foldr appendRule ([| $(checkType v t) |]) vts'
+  
+-- Извлекает ряд значений из динамиков и их типов и заменяет в коде exp переменные на извлечённые
+extractAndExecute :: (Quasi m) => [(ExpQ, TypeQ)] -> ExpQ -> m Exp
+extractAndExecute vts exp = runQ $ foldr extractAndExecute' [| Just ($exp) |] (reverse vts)
+  where
+    extractAndExecute' (v,t) exp = do
+      d <- runQ [| (fromDynamic ($v) :: (Maybe $t)) >>= \ x -> $exp |]
+      let (InfixE (Just (SigE (AppE fd var1) type1)) op (Just (LamE [VarP var2] code))) = d
+      return $ InfixE (Just (SigE (AppE fd var1) type1)) op (Just (LamE [VarP var2] (changeVar code var1 (VarE var2))))
+         
+-- Проходится по дереву и заменяет вхождения v1 на v2
+changeVar code v1 v2 = everywhere (mkT $ \v -> if v == v1 then v2 else v) code
+
+data TestType = Static ExpQ | Dynamic ExpQ
+
+nntoet :: [(Name, Name)] -> [(ExpQ, TypeQ)]
+nntoet ns = map (\(v, t) -> (varE v, conT t)) ns
+
+nttoet :: [(Name, TypeQ)] -> [(ExpQ, TypeQ)]
+nttoet ns = map (\(v, t) -> (varE v, t)) ns
+
+
+-- Получает на вход набор переменных с типами, тест и код на случай успеха. Возвращает Just Result или Nothing
+testAndExecute :: (Quasi m) => [(ExpQ, TypeQ)] -> TestType -> ExpQ -> m Exp
+testAndExecute vts test code = runQ [| if ($(checkTypes vts) && $(test' test))
+                                       then $(extractAndExecute vts [| toDyn ($code) |])
+                                       else Nothing |]
+  where test' (Static e)  = runQ [| $(extractAndExecute vts [| ($e) :: Bool |]) == (Just True) |]
+        test' (Dynamic e) = runQ [| ($e >>= fromDynamic) == (Just True) |]
+        
+-- Получает имена
+testAndExecuteNT :: (Quasi m) => [(Name, Name)] -> TestType -> ExpQ -> m Exp
+testAndExecuteNT vts test code = testAndExecute (nntoet vts) test code
+        
+testAndExecuteN :: (Quasi m) => [(Name, TypeQ)] -> TestType -> ExpQ -> m Exp
+testAndExecuteN vts test code = testAndExecute (nttoet vts) test code
+
+-- Аналогичная предыдущей, только работает со списком таких параметров
+testsAndExecutes :: (Quasi m) => [([(ExpQ, TypeQ)], TestType, ExpQ)] -> m Exp
+testsAndExecutes pl = runQ $ foldr testsAndExecutes' [| Nothing |] (reverse pl)
+  where
+    testsAndExecutes' (vts, test, code) e = [| $(testAndExecute vts test code) `mplus`  $e |]
+
+-- Получает имена
+testsAndExecutesNT :: (Quasi m) => [([(Name, Name)], TestType, ExpQ)] -> m Exp
+testsAndExecutesNT pl = testsAndExecutes $ map (\(vts, tt, e) -> (nntoet vts, tt, e)) pl
+
+testsAndExecutesN :: (Quasi m) => [([(Name, TypeQ)], TestType, ExpQ)] -> m Exp
+testsAndExecutesN pl = testsAndExecutes $ map (\(vts, tt, e) -> (nttoet vts, tt, e)) pl
+
+
+-- Аналогичны предыдущим, только без теста
+typeAndExecute :: (Quasi m) => [(ExpQ, TypeQ)] -> ExpQ -> m Exp
+typeAndExecute vts code = testAndExecute vts (Static [| True |]) code
+
+typeAndExecuteNT :: (Quasi m) => [(Name, Name)] -> ExpQ -> m Exp
+typeAndExecuteNT vts code = testAndExecute (nntoet vts) (Static [| True |]) code
+
+typeAndExecuteN :: (Quasi m) => [(Name, TypeQ)] -> ExpQ -> m Exp
+typeAndExecuteN vts code = testAndExecute (nttoet vts) (Static [| True |]) code
+
+typesAndExecutes :: (Quasi m) => [([(ExpQ, TypeQ)], ExpQ)] -> m Exp
+typesAndExecutes pl = testsAndExecutes $ map (\ (vts, code) -> (vts, (Static [| True |]), code)) pl
+
+typesAndExecutesNT :: (Quasi m) => [([(Name, Name)], ExpQ)] -> m Exp
+typesAndExecutesNT pl = typesAndExecutes $ map (\(vts, e) -> (nntoet vts, e)) pl
+
+typesAndExecutesN :: (Quasi m) => [([(Name, TypeQ)], ExpQ)] -> m Exp
+typesAndExecutesN pl = typesAndExecutes $ map (\(vts, e) -> (nttoet vts, e)) pl
+
+-- Возможно это как-то можно переписать, но врядли. Так что пусть будут клоны предыдущих функций. Использовать только если результат не выводим
+testAndExecute' :: (Quasi m) => [(ExpQ, TypeQ)] -> TestType -> ExpQ -> TypeQ -> m Exp
+testAndExecute' vts test code resultType = runQ [| if ($(checkTypes vts) && $(test' test))
+                                                   then $(extractAndExecute vts [| toDyn (($code) :: $resultType) |])
+                                                   else Nothing |]
+  where test' (Static e)  = runQ [| $(extractAndExecute vts [| ($e) :: Bool |]) == (Just True) |]
+        test' (Dynamic e) = runQ [| ($e >>= fromDynamic) == (Just True) |]
+
+
+testAndExecuteNT' :: (Quasi m) => [(Name, Name)] -> TestType -> ExpQ -> Name -> m Exp
+testAndExecuteNT' vts test code resultType = testAndExecute' (nntoet vts) test code (conT resultType)
+
+testAndExecuteN' :: (Quasi m) => [(Name, TypeQ)] -> TestType -> ExpQ -> TypeQ -> m Exp
+testAndExecuteN' vts test code resultType = testAndExecute' (nttoet vts) test code resultType
+
+testsAndExecutes' :: (Quasi m) => [([(ExpQ, TypeQ)], TestType, ExpQ, TypeQ)] -> m Exp
+testsAndExecutes' pl = runQ $ foldr testsAndExecutes' [| Nothing |] (reverse pl)
+  where
+    testsAndExecutes' (vts, test, code, resultType) e = [| $(testAndExecute' vts test code resultType) `mplus`  $e |]
+
+testsAndExecutesNT' :: (Quasi m) => [([(Name, Name)], TestType, ExpQ, Name)] -> m Exp
+testsAndExecutesNT' pl = testsAndExecutes' $ map (\(vts, test, code, rt) -> (nntoet vts, test, code, conT rt)) pl
+
+testsAndExecutesN' :: (Quasi m) => [([(Name, TypeQ)], TestType, ExpQ, TypeQ)] -> m Exp
+testsAndExecutesN' pl = testsAndExecutes' $ map (\(vts, test, code, rt) -> (nttoet vts, test, code, rt)) pl
+
+-- Аналогичны предыдущим, только без теста
+typeAndExecute' :: (Quasi m) => [(ExpQ, TypeQ)] -> ExpQ -> TypeQ -> m Exp
+typeAndExecute' vts code rt = testAndExecute' vts (Static [| True |]) code rt
+
+typeAndExecuteNT' :: (Quasi m) => [(Name, Name)] -> ExpQ -> Name -> m Exp
+typeAndExecuteNT' vts code rt =  typeAndExecute' (nntoet vts) code (conT rt)
+
+typeAndExecuteN' :: (Quasi m) => [(Name, TypeQ)] -> ExpQ -> TypeQ -> m Exp
+typeAndExecuteN' vts code rt =  typeAndExecute' (nttoet vts) code rt
+
+typesAndExecutes' :: (Quasi m) => [([(ExpQ, TypeQ)], ExpQ, TypeQ)] -> m Exp
+typesAndExecutes' pl = testsAndExecutes' $ map (\ (vts, code, rt) -> (vts, (Static [| True |]), code, rt)) pl
+
+typesAndExecutesNT' :: (Quasi m) => [([(Name, Name)], ExpQ, Name)] -> m Exp
+typesAndExecutesNT' pl = typesAndExecutes' $ map (\ (vts, code, rt) -> (nntoet vts, code, conT rt)) pl
+
+typesAndExecutesN' :: (Quasi m) => [([(Name, TypeQ)], ExpQ, TypeQ)] -> m Exp
+typesAndExecutesN' pl = typesAndExecutes' $ map (\ (vts, code, rt) -> (nttoet vts, code, rt)) pl
+
+
+-- генерация таблицы символов
+-- требует имя
+genSymbolTable :: (Quasi m) => [(String, ExpQ)] -> m [Dec]
+genSymbolTable fs =  
+  let list = foldr genSymbolTable1 [| [] |] fs
+  in  runQ [d| symbolTable :: [(String, ([Dynamic] -> Maybe Dynamic))]
+               symbolTable = $list |]
+  where
+    genSymbolTable1 (n,f) e = [| (n, $f) : $e |]
+
+-- не требует имени
+genSymbolTable' :: (Quasi m) => [ExpQ] -> m [Dec]
+genSymbolTable' fs =
+  let list = foldr genSymbolTable1 [| [] |] fs
+  in  runQ [d| symbolTable :: [(String, ([Dynamic] -> Maybe Dynamic))]
+               symbolTable = $list |]
+  where 
+    genSymbolTable1 f e = [| $(toPair f) : $e |]
+    toPair f = do  
+      f' <- f
+      let (VarE n) = f'
+          name = pprint n
+      [| (name, $f) |]
+    
+-- генерация таблицы чтений 
+genReadTable :: (Quasi m) => [(String, ExpQ, TypeQ)] -> m [Dec]
+genReadTable trs =
+  let list = foldr genReadTable'' [| [] |] trs
+  in  runQ [d| readTable :: [(String, (String -> Dynamic))]
+               readTable = $list |]
+  where
+    genReadTable'' (typeString, read, resType) exp =
+      [| (typeString, \s -> toDyn ((($read) s) :: $resType)) : $exp |]
+
+-- оно же, но с попыткой вычленить имя
+genReadTable' :: (Quasi m) => [(ExpQ, TypeQ)] -> m [Dec]
+genReadTable' trs = 
+  let list = foldr genReadTable''' [| [] |] trs
+  in  runQ [d| readTable :: [(String, (String -> Dynamic))]
+               readTable = $list |]
+  where
+    genReadTable''' (read, resType) exp = do
+      t <- resType
+      let (ConT ts) = t
+          typeString = pprint ts
+      [| (typeString, \s -> toDyn ((($read) s) :: $resType)) : $exp |]
+
+-- генерирует таблицу отображений
+genShowTable :: (Quasi m) => [(TypeQ, String, ExpQ)] -> m [Dec]
+genShowTable ts =
+  let list = foldr genShowTable'' [| [] |] ts
+  in  runQ [d| showTable :: [(TypeRep, (Dynamic -> Maybe String))]
+               showTable = $list |]
+  where
+    genShowTable'' (varType, typeString, show) exp = [| ((typeOf (undefined :: $varType)), \d -> (fromDynamic d :: (Maybe $varType)) >>= \o -> return ("(" ++ ($show o) ++ " :: " ++ typeString ++")")) : $exp |]
+
+-- Аналогично, но получает имя типа
+genShowTable' :: (Quasi m) => [(Name, String, ExpQ)] -> m [Dec]
+genShowTable' ts = genShowTable $ map (\(n,s,e) -> (conT n,s,e)) ts
+
+-- аналогично, но пытается сама определить имя
+genShowTable'' :: (Quasi m) => [(TypeQ, ExpQ)] -> m [Dec]
+genShowTable'' ts = 
+  let list = foldr genShowTable''' [| [] |] ts
+  in  runQ [d| showTable :: [(TypeRep, (Dynamic -> Maybe String))]
+               showTable = $list |]
+  where
+    genShowTable''' (varType, show) exp = do
+      t <- varType
+      let (ConT ts) = t
+          typeString = pprint ts
+      [| ((typeOf (undefined :: $varType)), \d -> (fromDynamic d :: (Maybe $varType)) >>= \o -> return ("((" ++ ($show o) ++ ") :: " ++ typeString ++")")) : $exp |]
+
+-- генерирует сразу и readTable и showTable
+genReadShowTable :: (Quasi m) => [(TypeQ, String, ExpQ, ExpQ)] -> m [Dec]
+genReadShowTable is = do
+  read' <- genReadTable  $ map (\(ty, str, read, show) -> (str, read, ty)) is
+  show' <- genShowTable $ map (\(ty, str, read, show) -> (ty, str, show)) is
+  return $ read' ++ show'
+
+-- Аналогично, но получает имя типа
+genReadShowTable' :: (Quasi m) => [(Name, String, ExpQ, ExpQ)] -> m [Dec]
+genReadShowTable' is = genReadShowTable $ map (\(n,s,r,sh) -> (conT n, s, r, sh)) is
+
+-- Аналогично, но сама подбирает имя
+genReadShowTable'' :: (Quasi m) => [(TypeQ, ExpQ, ExpQ)] -> m [Dec]
+genReadShowTable'' is = do
+  read' <- genReadTable' $ map (\(ty, read, show) -> (read, ty)) is
+  show' <- genShowTable'' $ map (\(ty, read, show) -> (ty, show)) is
+  return $ read' ++ show'
+\end{appix} %$
+
+\chapter{gen\_main.awk}
+
+\begin{appix}
+#!/usr/bin/gawk -f 
+
+/module/,/where/ {
+    S = S " " $0
+    if (/where/) {
+	if ((S ~ /symbolTable/) && (S ~ /readTable/) && (S ~ /showTable/)) {
+	    match(S, /module[[:space:]]+(['.[:alnum:]]+)[[:space:]]*\(/, arr)
+	    name = arr[1];
+	    modules[name] = 1;
+	}
+	S = ""
+    }
+}
+
+END {
+    print "import DynamicFace"
+    for (m in modules) {
+	if (!m || (m == "DynamicFace")) continue;
+	print "import qualified", m
+    }
+
+    printf("%s\n", "main = repl $ defaultPD {");
+    printf("%s", "  importModules = [");
+    for (m in modules) {
+	if (!m || (m == "DynamicFace")) continue;
+	if (F) printf("%s", ", ");
+	F = 1;
+	printf("(\"%s\", (%s.symbolTable, %s.readTable, %s.showTable))", m, m, m, m);
+    }
+    printf("%s\n", "]");    
+    printf("%s\n", "  }");    
+}
+\end{appix}
+
+\chapter{DynamicFace.hs}
+
+\begin{appix}
+module DynamicFace (
+  module Data.Dynamic,
+  -- DFunction -> DFunction -> DFunction
+  dplus,                        -- Join two dynamic functions
+
+  -- [(String, ([Dynamic] -> Maybe Dynamic))] -> [(String, ([Dynamic] -> Maybe Dynamic))] -> [(String, ([Dynamic] -> Maybe Dynamic))]
+  stplus,                       -- Join two symbol table
+
+  -- [(String, (String -> Dynamic))] -> [(String, (String -> Dynamic))] -> [(String, (String -> Dynamic))]
+  rtplus,                       -- Join two read table
+  
+  -- [(TypeRep, (Dynamic -> Maybe String))] -> [(TypeRep, (Dynamic -> Maybe String))] -> [(TypeRep, (Dynamic -> Maybe String))]
+  shtplus,                      -- Join two show table
+  
+  -- [(String, ([Dynamic] -> Maybe Dynamic))] -> String -> Maybe ([Dynamic] -> Maybe Dynamic)
+  getFun,                       -- Get function from symbol table by name
+  
+  -- [(String, (String -> Dynamic))] -> String -> Maybe (String -> Dynamic)
+  getRead, -- Get read function from read table by type name
+
+  -- [(TypeRep, (Dynamic -> Maybe String))] -> Dynamic -> Maybe String
+  getShow,                      -- Get String representation of variable from show table
+
+  -- String -> Maybe (String, [(String, String)])
+  parseString,                  -- Get (functionName, [(ArgRepr, ArgType)]) representation from string
+  
+  -- [(String, (String -> Dynamic))] -> (String, String) -> Maybe Dynamic
+  argToDyn,                     -- Get dynamic argument from read table by (ArgRepr, ArgType) tuple
+  
+  -- [(String, ([Dynamic] -> Maybe Dynamic))] -- symbolList
+  -- -> [(String, (String -> Dynamic))] -- typeList
+  -- -> (String, [(String, String)]) -- (fun, argList)
+  -- -> Maybe Dynamic
+  eval,                          -- Get result of eval of (functionName, [(ArgRepr, ArgType)]) by symbol table and read table
+  repl,
+  ProgramData (PD),
+  defaultPD,
+  readInput,
+  symbolTable,
+  readTable,
+  showTable,
+  importModules
+  ) where
+
+import Monad
+import Data.List
+import Data.Dynamic
+import Data.Typeable
+import Text.ParserCombinators.Parsec
+
+type DFunction = [Dynamic] -> Maybe Dynamic
+
+-- Собирает две динамические функции в одну
+dplus :: DFunction -> DFunction -> DFunction
+dplus f1 f2 as = f1 as `mplus` f2 as
+
+type SymbolTable = [(String, DFunction)]
+
+-- Объединяет два списка символов
+stplus :: SymbolTable -> SymbolTable -> SymbolTable
+stplus as bs = map stplus' ns
+  where 
+    ns = nub $ map fst (as ++ bs)
+    stplus' n = case (lookup n as, lookup n bs) of
+      (Just f1, Nothing) -> (n, f1)
+      (Nothing, Just f2) -> (n, f2)
+      (Just f1, Just f2) -> (n, f1 `dplus` f2)
+          
+type ReadTable = [(String, (String -> Dynamic))]                            
+                            
+-- Объединяет два списка типов
+rtplus :: ReadTable -> ReadTable -> ReadTable
+rtplus = (++)
+
+type ShowTable = [(TypeRep, (Dynamic -> Maybe String))]
+
+-- Объединяет два списка типов выводимых
+shtplus :: ShowTable -> ShowTable -> ShowTable
+shtplus = (++)
+
+-- По имени функции и таблице символов возвращает функцию
+getFun :: SymbolTable -> String -> Maybe DFunction
+getFun = flip lookup
+
+getShow :: ShowTable -> Dynamic -> Maybe String
+getShow sl a = case lookup (dynTypeRep a) sl of
+  Just f -> f a
+  Nothing -> Nothing
+
+-- По имени типа и списку типов возвращает функцию чтения
+getRead :: ReadTable -> String -> Maybe (String -> Dynamic)
+getRead = flip lookup
+
+data Function = Fun { fname :: String,
+                      fargs :: [Argument]
+                    }
+data Argument = Arg { aname :: String,
+                      atype :: String
+                    }
+
+---------------------------- Скопировано из ../process.hs явно стоит оформить как-то отдельной библиотекой -----------
+
+spaceSymbol :: Char -> Bool
+spaceSymbol ' '  = True
+spaceSymbol '\n' = True
+spaceSymbol '\t' = True
+spaceSymbol c    = False
+
+trimHead :: String -> String
+trimHead = dropWhile spaceSymbol
+
+trimTail :: String -> String
+trimTail = reverse . trimHead . reverse
+
+trim :: String -> String
+trim s = trimTail $ trimHead s
+
+--
+word :: Parser String
+word = many1 (alphaNum <|> oneOf "_'." <?> "") <?> "word"
+
+-- пробельные символы, которые как правило будут игнорироваться
+sn = (space <|> newline <|> tab)
+
+-- Для считывания до конца строки. Предпологается, что мы уже прочитали открывающую двойную ковычку и ищем закрывающую
+quotedString :: Parser String
+quotedString = do{ char '\\'
+                 ; c1 <- anyChar
+                 ; s <- quotedString
+                 ; return ('\\':c1:s)
+                 }
+               <|> do { char '"'
+                      ; return ""
+                      }
+               <|> do { c2 <- anyChar
+                      ; s <- quotedString
+                      ; return (c2:s)
+                      }
+
+-- считывает весь текст до строки "s". Всегда обрабатывает фигурные и круглые
+-- скобки как парные и s внутри них не ищет.
+-- Аналогично с одинарными и двойными ковычками
+beforeWord :: String -> Parser String
+beforeWord s = do { try (string s)
+                  ; return ""
+                  }
+               <|> do { c <- anyChar
+                      ; (case c of
+                            -- '\'' -> do{ s0 <- beforeWord "'"
+                            --          ; s0' <- beforeWord s
+                            --          ; return ((c:s0) ++ ('\'':s0'))
+                            --          }
+                            '(' -> do{ s1 <- beforeWord ")"
+                                     ; s1' <- beforeWord s
+                                     ; return ((c:s1) ++ (')':s1'))
+                                     }
+                            '{' -> do{ s2 <- beforeWord "}"
+                                     ; s2' <- beforeWord s
+                                     ; return ((c:s2) ++ ('}':s2'))
+                                     }
+                            '[' -> do{ s2 <- beforeWord "]"
+                                     ; s2' <- beforeWord s
+                                     ; return ((c:s2) ++ (']':s2'))
+                                     }
+                            '"' -> do{ s2 <- quotedString
+                                     ; s2' <- beforeWord s
+                                     ; return ((c:s2) ++ ('"':s2'))
+                                     }
+                            _  -> do{ s3 <- beforeWord s
+                                    ; return (c:s3)
+                                    })
+                         }
+
+------ Теперь разбор формата команды
+
+number :: Parser Char
+number = char '0' <|> char '1' <|> char '2' <|> char '3' <|> char '4'
+         <|> char '5' <|> char '6' <|> char '7' <|> char '8' <|> char '9'
+         <|> char '.' <|> char '-' <|> char '+' 
+         
+-- Разбирает аргумент в виде (arg : Type)
+argument :: Parser Argument -- (Representation, Type)
+argument = do{ s <- try $ many1 number
+             ; if isInt s then
+                 return $ Arg s "Integer"
+               else
+                 return $ Arg s "Double"
+             }
+           -- <|> [ array of number ] <|> [[ matrix of number ]] <|> (re, im) complex
+           <|> do{ char '('
+                 ; r <- fmap trim (beforeWord "::")
+                 ; t <- fmap trim (beforeWord ")")
+                 ; return $ Arg r t
+                 }
+
+isInt :: String -> Bool
+isInt = notElem '.'
+           
+-- Парсит список аргументов
+argList :: Parser [Argument]
+argList = do{ a <- argument
+            ; many sn
+            ; do{ as <- argList
+                ; return (a:as)
+                }
+              <|> return [a]
+            }
+          
+function :: Parser Function -- (funname, arglist)
+function = do{ many sn
+             ; n <- word
+             ; many sn
+             ; as <- argList
+             ; return $ Fun n as
+             }
+
+-- Минимальное определение языка закончено
+
+run :: Parser a -> String -> Maybe a
+run p input = 
+  case (parse p "" input) of
+    Left err -> Nothing
+    Right x  -> Just x
+
+
+parseString :: String -> Maybe Function
+parseString = run function
+
+argToDyn :: ReadTable -> Argument -> Maybe Dynamic
+argToDyn tl (Arg r t) = ap (getRead tl t) (Just r)
+
+-- По списку разобранной функции, списку символов
+-- и списку типов вычисляет результат
+eval :: SymbolTable -> ReadTable -> Function -> Maybe Dynamic
+eval sl tl (Fun f al) = do
+  fun  <- getFun sl f
+  args <- sequence $ map (argToDyn tl) al
+  fun args
+
+-- Надо написать функцию реализующую цикл чтения, выполнения, вывода.
+
+-- replace old substring with new string in str
+replaceStr :: String -> String -> String -> String
+replaceStr "" old new  = ""
+replaceStr str "" _    = str
+replaceStr str old new = loop str
+  where
+    n = length old
+    loop "" = ""
+    loop str =
+      let (prefix, rest) = splitAt n str
+      in
+        if old == prefix                -- found an occurrence?
+        then new ++ loop rest           -- yes: replace it
+
+        else head str : loop (tail str) -- no: keep looking
+
+
+data ProgramData =
+  PD { readInput :: IO String,
+       symbolTable :: SymbolTable,
+       readTable :: ReadTable,
+       showTable :: ShowTable,
+       importModules :: [(String, (SymbolTable, ReadTable, ShowTable))]
+     }
+
+defaultPD :: ProgramData
+defaultPD = PD getLine [] [] [] []
+
+repl :: ProgramData -> IO ()
+repl pd = readInput pd >>= \s1 ->
+  case words s1 of
+    ("quit"):_ -> return ()
+    ("clear"):_ -> do
+      putStrLn "==> cleared"
+      repl pd {
+        symbolTable = [],
+        readTable = [],
+        showTable =[]
+        }
+    ("import"):name:_ -> case lookup name (importModules pd) of
+      Just (st, rt, sht) -> do
+        putStrLn "==> imported"
+        repl pd {
+          symbolTable = symbolTable pd `stplus` st,
+          readTable   = readTable pd `rtplus` rt,
+          showTable   = showTable pd `shtplus` sht
+          }
+      Nothing -> do
+        putStrLn "==> module not found"
+        repl pd
+    l -> let s' = do
+               cmd <- parseString (unwords l)
+               res <- eval (symbolTable pd)
+                           (readTable pd) cmd
+               getShow (showTable pd) res
+         in do
+          case s' of
+            Just s -> putStrLn $ "==> " ++ s
+            Nothing -> putStrLn "==> can't parse input"
+          repl pd
+
+
+\end{appix}
