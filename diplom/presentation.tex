@@ -1,0 +1,237 @@
+% -*- mode: LaTeX; mode: auto-fill; mode: flyspell; coding: utf-8; -*-
+\documentclass[ucs]{beamer}
+\usepackage[T2A]{fontenc}
+\usepackage[english,russian]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage{verbatim}
+\newenvironment{code}{\small\verbatim}{\normalsize\endverbatim}
+
+\usetheme % [secheader]
+    {Madrid}
+
+\title[Динамическая диспетчеризация]{Динамическая диспетчеризация в языке Haskell}
+\author{Меринов Николай}
+\institute{УрГУ}
+\date{2010}
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Статические системы типов}
+  \framesubtitle{Преимущества}
+  \begin{block}{Документация}
+    %% Указание типов переменных позволяет судить о том что делает код
+\begin{verbatim}
+filter :: (a -> Bool) -> [a] -> [a]
+\end{verbatim}
+  \end{block}
+
+  \begin{block}{Контроль ошибок}
+    %% Попытка вызвать функцию \verb=square= от нечисловой переменной
+    %% будет обнаружена на этапе компиляции
+\begin{verbatim}
+square :: Integer -> Integer
+func = square "test"
+\end{verbatim}
+  \end{block}
+
+  \begin{block}{Простота изменения кода}
+    %% В случае изменения типа данных Man компилятор укажет все места
+    %% которых коснулось изменение
+\begin{verbatim}
+data Man = P Name Gender Age
+
+read :: String -> Man
+process :: Man -> Man
+\end{verbatim}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Статические системы типов}
+  \framesubtitle{Недостатки}
+
+  \begin{block}{Усложнение синтаксиса}
+    %% Добавление в язык новых конструкций, иногда приходится писать
+    %% как в примере.
+\begin{verbatim}
+(square :: (Double -> Double)) (1 :: Double)
+\end{verbatim}
+  \end{block}
+
+  \begin{block}{Уменьшение выразительности}
+    %% Невозможно выразить такое простое поведение как в классическом
+    %% примере на perl
+\begin{verbatim}
+open(F, "filename") or die("can't open");
+\end{verbatim}
+  \end{block}
+
+  \begin{block}{Монолитность решений}
+    %% При добавлении нового конструктора в data Expr придётся менять
+    %% все функции обрабатывающие выражение непосредственно там где
+    %% они написаны.
+\begin{verbatim}
+data Expr = I Int | D Dobule | Sum Expr Expr
+
+inc :: Expr -> Expr
+inc (I a) = a + 1
+inc (D a) = a + 1.0
+inc (S a b) = S (inc a) (inc b)
+\end{verbatim}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Борьба с недостатками}
+  \framesubtitle{Генерация кода}
+
+  \begin{block}{Текстовая подстановка}
+    %% C-like макросы
+\begin{verbatim}
+#define INSTANCE_SHOW(tycon, str) \
+instance Show tycon where { show _ = str }
+
+INSTANCE_SHOW(Type1, "Type1 object")
+\end{verbatim}
+  \end{block}
+
+  \begin{block}{Template Haskell}
+    %% генерация кода программой на Haskell
+\begin{verbatim}
+sumN n = do
+  sum <- [| sum |]
+  names <- sequence $ take n $ map newName (repeat "var")
+  return $ LamE (map VarP names)
+    (AppE sum (ListE (map VarE names)))
+
+$(sumN 3) 1 2 3 == 6
+\end{verbatim}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Борьба с недостатками}
+  \framesubtitle{Добавление исключений в систему типов}
+
+  \begin{block}{Включение в язык функций соответствующих любому типу}
+\begin{verbatim}
+if isDataCorrect a
+  then parse a
+  else error "incorrect input"
+\end{verbatim}
+  \end{block}
+
+  \begin{block}{Возможность отключения проверки типов}
+\begin{verbatim}
+unsafeCoerce :: a -> b
+
+cast :: (Typeable a, Typeable b) => a -> Maybe b
+cast x = r
+  where r = if typeOf x == typeOf (fromJust r)
+              then Just $ unsafeCoerce x
+              else Nothing
+\end{verbatim}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Системы работы с данными разных типов}
+  \framesubtitle{существующие решения}
+
+  \begin{block}{Примеры систем}
+    \begin{itemize}
+    \item Instance Deriving
+    \item Data.Typeable
+    \item Data.Dynamic
+    \item Generic Haskell
+      \begin{itemize}
+      \item SYB
+      \item RepLib
+      \item Uniplate
+      \item \dots
+      \end{itemize}
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Реализация полиморфных функций}
+  \framesubtitle{Data.Dynamic}
+
+  \begin{block}{Пример функции}
+\begin{verbatim}
+plus :: [Dynamic] -> Maybe Dynamic
+plus [a, b]
+  | (dynTypeRep a) == (typeOf (undefined :: Integer))
+    && (dynTypeRep b) == (typeOf (undefined :: Integer))
+  = (fromDynamic a :: Maybe Integer) >>= \a ->
+    (fromDynamic b :: Maybe Integer) >>= \b ->
+    return $ toDyn (a + b)
+  | (dynTypeRep a) == (typeOf (undefined :: Double))
+    && (dynTypeRep b) == (typeOf (undefined :: Double))
+  = (fromDynamic a :: Maybe Double) >>= \a ->
+    (fromDynamic b :: Maybe Double) >>= \b ->
+    return $ toDyn (a + b)
+plus _ = Nothing
+\end{verbatim}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Генерация функций}
+  \framesubtitle{Template Haskell}
+
+  \begin{block}{Пример функции}
+\begin{verbatim}
+p1 :: Double -> Double -> Double
+p1 = (+)
+
+plus :: [Dynamic] -> Maybe Dynamic
+plus [a, b] = $(typesAndExecutesN [
+  ([('a, [t| Integer |]),
+    ('b, [t| Integer |])],
+  [| a + b |]),
+
+  ([('a, [t| Double |]),
+    ('b, [t| Double |])],
+  [| (unsafeCoerce p1 :: (a -> a -> a)) a b |])
+])
+\end{verbatim}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Генерация функций}
+  \framesubtitle{Миниязык}
+
+  \begin{block}{Пример функции}
+\begin{verbatim}
+Integer plus (Integer a, Integer b)
+Double plus (Double a, Double b)
+{
+  a + b
+}
+\end{verbatim}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Описание системы}
+  \framesubtitle{}
+  
+  \begin{block}{Реализованные модули}
+    \begin{itemize}
+    \item Haskell библиотека реализующая решение на Template Haskell
+    \item Программа генерирующая динамические функции и данные
+      необходимые для их совместного использования.
+    \item Модуль языка Haskell реализующий примитивы для использования
+      динамических функций и простейший цикл ввода-вывода данных
+    \item Программа для генерации главного модуля системы.
+    \end{itemize}
+  \end{block}
+\end{frame}
+\end{document}
