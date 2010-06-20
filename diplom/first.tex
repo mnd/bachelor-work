@@ -89,12 +89,14 @@ if <сложная проверка> then S else <ошибка типа>
 система получает данные разных типов через текстовый интерфейс и
 обрабатывает их во время выполнения. В такой системе для того чтобы
 определить тип DataUnit функции
+
 \begin{code}
 readD :: StringTypeRepr -> StringDataRepr -> DataUnit
 \end{code}
 преобразующей введённые данные во внутреннее представление,
 использующееся модулями системы, необходимо\cite{tspl} определить центральный тип
 данных определяющий все возможные типы данных
+
 \begin{code}
 data DataUnit = Int Int
               | Integer Integer 
@@ -104,6 +106,7 @@ data DataUnit = Int Int
 и, при создании новых модулей для системы, добавлять информацию о
 появившихся типах данных в качестве конструктора для типа DataUnit. В
 таком случае мы сможем определить функцию readD как
+
 \begin{code}
 readD :: StringTypeRepr -> StringDataRepr -> DataUnit
 \end{code}
@@ -116,10 +119,12 @@ readD :: StringTypeRepr -> StringDataRepr -> DataUnit
 Другое возможное решение --- определить парy (TypeID, Data) и
 использовать unsafe возможности языка Haskell для преобразования
 введённых данных к типу Data
+
 \begin{code}
 unsafeCoerce inputData :: Data
 \end{code}
 При таком подходе для работы с данными для начала необходимо их извлечь из типа Data
+
 \begin{code}
 case typeID of
   ...
@@ -130,6 +135,7 @@ case typeID of
 Такое решение также не лишено недостатков: При использовании unsafe
 преобразований программист должен сам следить за корректностью типов.
 В качестве примера рассмотрим конструкцию
+
 \begin{code}
 case typeID of
   doubleID -> unsafeCoerce data :: Integer

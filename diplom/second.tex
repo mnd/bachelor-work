@@ -15,11 +15,13 @@ Template Haskell\cite{th1} создан как, гарантирующее безопасность типов,
 
 При помощи Template Haskell возможно создание функций генерирующих код
 во время компиляции. Так мы можем определить функции
+
 \begin{code}
 $(zipN 3)
 $(deriveShow ''Maybe)
 \end{code}
 Которые будут генерировать следующий код:
+
 \begin{code}
 let zip = \ y1 y2 y3 ->
   case (y1, y2, y3) of
@@ -41,6 +43,7 @@ Haskell, в рамках функциональной парадигмы программирования, то внутри
 
 Рассмотрим следующую задачу: Существует завод, структуры которого
 можно определить как
+
 \begin{code}
 data Factory  = Factory Director [Worker] [Builing]
 data Director = Director Name Salary
@@ -61,6 +64,7 @@ incS p (Salary s)     = Salary ((1 + d) * s)
 
 Имея такие функции мы сможем увеличить зарплату всех сотрудников на
 10\% вызвав функцию
+
 \begin{code}
 incF 0.1 factory
 \end{code}
@@ -70,6 +74,7 @@ incF 0.1 factory
 данную проблемы были созданы Generic Haskell библиотеки. При
 использовании одной из таких библиотек мы сможем увеличить зарплату
 всем сотрудникам при помощи функции
+
 \begin{code}
 everywhere (mkT $ incS p) factory
 \end{code} %$
@@ -82,6 +87,7 @@ everywhere (mkT $ incS p) factory
 Кроме этого некоторые библиотеки для обобщенного программирования,
 такие как SYB\cite{syb}, имеют интерфейсы для создания обощённых функций. В
 качестве примера рассмотрим написанный выше код:
+
 \begin{code}
 mkT $ incS p
 \end{code} %$
@@ -146,6 +152,7 @@ gread doubleID  data :: Double
 
 Dynamic типы распространяемые в комплекте с компилятором GHC
 представляют из себя пару
+
 \begin{code}
 data Dynamic = Dynamic TypeRep Data
 \end{code}
@@ -158,6 +165,7 @@ data Dynamic = Dynamic TypeRep Data
 скрытым, у программиста нет возможности нарушить безопасность
 типов. Таким образом функция readD в терминах типа Dynamic может быть
 записана следующим образом:
+
 \begin{code}
 readD :: StringTypeRepr -> StringDataRepr -> Dynamic
 readD t d = case t of
@@ -229,26 +237,31 @@ symbolTable :: [(String, Dynamic -> Dynamic -> Maybe Dynamic)]
 системы с целью добавления таблицы символов для функций новой
 арности. К счастью данный недостаток легко устранить переписав
 определение функции в виде
+
 \begin{code}
 func :: [Dynamic] -> Maybe Dynamic
 \end{code}
 И используя единую таблицу функций
+
 \begin{code}
 symbolTable :: [(String, Dynamic -> Dynamic -> Maybe Dynamic)]
 \end{code}
 
 Кроме таблицы символов такой системе потребуется таблица типов
+
 \begin{code}
 readTable :: [(String, String -> Maybe Dynamic)]
 \end{code}
 
 Каждую функцию данной таблицы можно определить через описанную выше
 функцию readD:
+
 \begin{code}
 readTable = [("Type1", readD "Type1"), ... ("TypeN", readD "TypeN")]
 \end{code}
 
 Также системе необходима таблица функций для вывода данных:
+
 \begin{code}
 showTable :: [(TypeRep, Dynamic -> Maybe String)]
 \end{code}

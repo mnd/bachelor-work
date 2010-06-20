@@ -6,6 +6,7 @@
 построенное на основе библиотеки Dynamic: Функция от двух аргументов,
 диспетчеризующая типы Integer и Double может быть определена следующим
 образом:
+
 \begin{code}
 func :: [Dynamic] -> Maybe Dynamic
 func [a1,a2] | (dynTypeRep a1 == typeOf (undefined :: Integer))
@@ -23,6 +24,7 @@ func _ = Nothing
 \end{code}	       
 
 Данная функция потребует определения следующих таблиц:
+
 \begin{code}
 symbolTable = [("func", func)]
 readTable = [("Integer", toDyn . (read :: String -> Integer)),
@@ -61,6 +63,7 @@ func [a1,a2] | $(typeTest [| a1 |] [t| Integer |])
 
 Наборы функций typeTest достаточно легко заменить на одну функцию,
 принимающую список пар (Аргумент, Тип):
+
 \begin{code}
 $(typeTest [
     ([| a1 |], [t| Integer |]),
@@ -71,6 +74,7 @@ $(typeTest [
 Немного более сложно заменить последовательность функций extractArg
 заканчивающуюся функцией packResult в качестве одной функции. Для
 определения такого ряда в виде
+
 \begin{code}
 $(extractAndEval [([| a1 |], [t| Integer |]),
                    ([| a2 |], [t| Integer |])]
@@ -82,6 +86,7 @@ $(extractAndEval [([| a1 |], [t| Integer |]),
 что синтаксические области видимости разделяются в момент
 синтаксического разбора, а не после генерации синтаксических
 деревьев. Это легко проследить на следующем примере
+
 \begin{code}
 runQ [| \a -> \a -> a |]
 ==> LamE [VarP a_2] (LamE [VarP a_3] (VarE a_3))
@@ -116,12 +121,14 @@ genReadShowTable [
 К сожалению, так как GHC проводит проверку типов как до запуска Template Haskell
 так и после, если функция function не является полиморфной функцией, то
 первая проверка типов, ожидающая увидеть тип функции
+
 \begin{code}
 function :: Dynamic -> Dynamic -> a
 \end{code}
 будет сигнализировать об ошибке. В качестве варианта решения данной
 проблемы можно использовать unsafe преобразование и записать вызов
 функции в виде
+
 \begin{code}
 [| (unsafeCoerce function :: (a -> b -> c)) a b |]
 \end{code}
@@ -216,6 +223,7 @@ String show (readTypes a) { show a }
 \begin{enumerate}
 \item Функции для объединения нескольких динамических функций и
   нескольких таблиц данных.
+
 \begin{code}
 dplus :: DFunction -> DFunction -> DFunction
 stplus :: SymbolTable -> SymbolTable -> SymbolTable
@@ -223,6 +231,7 @@ rtplus :: ReadTable -> ReadTable -> ReadTable
 shtplus :: ShowTable -> ShowTable -> ShowTable
 \end{code}
 \item Функции для взаимодействия с таблицами данных
+
 \begin{code}
 getFun :: SymbolTable -> String -> Maybe DFunction
 getRead :: ReadTable -> String -> Maybe (String -> Dynamic)
@@ -230,6 +239,7 @@ argToDyn :: ReadTable -> Argument -> Maybe Dynamic
 getShow :: ShowTable -> Dynamic -> Maybe String
 \end{code}
 \item А также функции используемые для разбора и выполнения ввода пользователя
+
 \begin{code}
 parseString :: String -> Maybe Function
 eval :: SymbolTable -> ReadTable -> Function -> Maybe Dynamic
@@ -237,6 +247,7 @@ eval :: SymbolTable -> ReadTable -> Function -> Maybe Dynamic
 \end{enumerate}
 
 Кроме того создана функция реализующая полностью REPL
+
 \begin{code}
 data ProgramData =
   PD { readInput :: IO String,
@@ -257,6 +268,7 @@ REPL.
 использования динамических функций. 
 
 Рассмотрим как будет выглядеть главный модуль:
+
 \begin{code}
 import DynamicFace
 import qualified DefaultModule as D
@@ -282,6 +294,7 @@ main = repl $ PD D.symbolTable, D.readTable, D.showTable
 Рассмотрим пример программы использующей предложенные решения:
 
 Создадим файл ``Math.gen'' со следующим содержанием
+
 \begin{code}
 module Math (
        symbolTable,
@@ -334,6 +347,7 @@ String show (readTypes a) { show a }
 динамический модуль Math. Теперь мы можем сгенерировать модуль Main.hs
 при помощи программ ищущей динамические модули. Автоматически
 сгенерированный модуль будет выглядеть следующим образом
+
 \begin{code}
 import DynamicFace
 import qualified Math
@@ -373,6 +387,7 @@ $
 умеет разбирать тип Double без подсказки. Также реализован разбор типа
 Integer. Для остальных типов при вводе необходима подсказка, то есть
 данные надо вводить в виде
+
 \begin{code}
 (string represenation :: Type Identifier)
 \end{code}

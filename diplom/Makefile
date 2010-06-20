@@ -13,4 +13,4 @@ presentation: presentation.tex
 
 clean:
 	# rm -f *.pdf *.dvi
-	rm -f *.log *.aux *~ *.bbl *.blg *.nlo *.toc *.out *.nav *.snm
+	rm -f *.log *.aux *~ *.bbl *.blg *.nlo *.toc *.out *.nav *.snm *.vrb

@@ -1,6 +1,6 @@
 % -*- mode: LaTeX; mode: auto-fill; mode: flyspell; coding: koi8-r; -*-
 \appendix
-\chapter{process.hs}
+\chapter{Реализация и описание метаязыка}
 
 \begin{appix}
 import Data.Char
@@ -492,7 +492,7 @@ main = do
 -}
 \end{appix} %$
 
-\chapter{DynamicGen.hs}
+\chapter{Реализация генератора кода на Template Haskell}
 
 \begin{appix}
 {-# LANGUAGE TemplateHaskell #-}
@@ -792,7 +792,7 @@ genReadShowTable'' is = do
   return $ read' ++ show'
 \end{appix} %$
 
-\chapter{gen\_main.awk}
+\chapter{Программа генерирующая основной модуль системы}
 
 \begin{appix}
 #!/usr/bin/gawk -f 
@@ -829,7 +829,7 @@ END {
 }
 \end{appix}
 
-\chapter{DynamicFace.hs}
+\chapter{Библиотека для совместного использования динамических функций.}
 
 \begin{appix}
 module DynamicFace (
