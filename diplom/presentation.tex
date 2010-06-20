@@ -104,7 +104,7 @@ INSTANCE_SHOW(Type1, "Type1 object")
 \begin{verbatim}
 sumN n = do
   sum <- [| sum |]
-  names <- sequence $ take n $ map newName (repeat "var")
+  names <- mapM newName $ take n $ repeat "var"
   return $ LamE (map VarP names)
     (AppE sum (ListE (map VarE names)))
 
