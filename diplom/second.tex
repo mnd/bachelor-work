@@ -84,7 +84,7 @@ everywhere (mkT $ incS p) factory
 либо при помощи Template Haskell, либо при помощи внешних генераторов
 кода, либо создавая расширение для компилятора\cite{gen}.
 
-Кроме этого некоторые библиотеки для обобщенного программирования,
+Кроме этого некоторые библиотеки для обобщённого программирования,
 такие как SYB\cite{syb}, имеют интерфейсы для создания обощённых функций. В
 качестве примера рассмотрим написанный выше код:
 
@@ -227,10 +227,12 @@ func3 :: Dynamic -> Dynamic -> Dynamic -> Maybe Dynamic
 функцией
 
 \begin{code}
-symbolTable :: [(String, Dynamic -> Dynamic -> Maybe Dynamic)]
+symbolTable1 :: [(String, Dynamic -> Maybe Dynamic)]
+symbolTable2 :: [(String, Dynamic -> Dynamic -> Maybe Dynamic)]
+symbolTable3 :: [(String, Dynamic -> Dynamic -> Dynamic -> Maybe Dynamic)]
 \end{code}
 
-Как видно из данного определения, при использовании так определённых
+Как видно из данных определений, при использовании так определённых
 динамических функций нам придётся иметь по таблице символов для
 функций каждой арности. И если в каком-то модуле появятся функции
 неучтённой арности, то разработчику модуля придётся изменять код ядра
@@ -244,7 +246,7 @@ func :: [Dynamic] -> Maybe Dynamic
 И используя единую таблицу функций
 
 \begin{code}
-symbolTable :: [(String, Dynamic -> Dynamic -> Maybe Dynamic)]
+symbolTable :: [(String, [Dynamic] -> Maybe Dynamic)]
 \end{code}
 
 Кроме таблицы символов такой системе потребуется таблица типов
