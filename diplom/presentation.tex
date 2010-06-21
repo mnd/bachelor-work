@@ -20,6 +20,13 @@
 \end{frame}
 
 \begin{frame}[fragile]
+  \frametitle{Динамическая диспетчеризация}
+  \framesubtitle{}
+  %% написать
+\end{frame}
+
+%% VOICE: СОКРАТИТЬ РЕЧЬ В СИСТЕМАХ ТИПОВ
+\begin{frame}[fragile]
   \frametitle{Статические системы типов}
   \framesubtitle{Преимущества}
   \begin{block}{Документация}
@@ -75,7 +82,7 @@ open(F, "filename") or die("can't open");
     %% все функции обрабатывающие выражение непосредственно там где
     %% они написаны.
 \begin{verbatim}
-data Expr = I Int | D Dobule | Sum Expr Expr
+data Expr = I Int | D Double | Sum Expr Expr
 
 inc :: Expr -> Expr
 inc (I a) = a + 1
@@ -219,17 +226,18 @@ Double plus (Double a, Double b)
   \end{block}
 \end{frame}
 
+%% VOICE: ГРОМКО ТОРЖЕСТВЕННО
 \begin{frame}[fragile]
-  \frametitle{Описание системы}
-  \framesubtitle{}
+  \frametitle{Результаты моей работы}
+  \framesubtitle{Описание системы}
   
   \begin{block}{Реализованные модули}
     \begin{itemize}
-    \item Haskell библиотека реализующая решение на Template Haskell
-    \item Программа генерирующая динамические функции и данные
-      необходимые для их совместного использования.
-    \item Модуль языка Haskell реализующий примитивы для использования
-      динамических функций и простейший цикл ввода-вывода данных
+    \item Haskell библиотека, реализующая решение на Template Haskell
+    \item Программа, генерирующая динамические функции и данные,
+      необходимые для совместного использования динамических модулей.
+    \item Модуль языка Haskell, реализующий примитивы для использования
+      динамических функций и простейший цикл ввода-вывода данных.
     \item Программа для генерации главного модуля системы.
     \end{itemize}
   \end{block}
