@@ -1,5 +1,9 @@
 module DynamicFace (
   module Data.Dynamic,
+  -- Int -> (a1 -> … -> aN) -> DFunction
+  mkDynN,
+  -- (a1 -> … -> aN) -> DFunction
+  mkDyn,
   -- DFunction -> DFunction -> DFunction
   dplus,                        -- Join two dynamic functions
 
@@ -49,6 +53,20 @@ import Data.Typeable
 import Text.ParserCombinators.Parsec
 
 type DFunction = [Dynamic] -> Maybe Dynamic
+
+-- Apply arguments to Dynamic function
+-- foldM dynApply (toDyn function) [argList]
+dynamicApply :: Dynamic -> [Dynamic] -> Maybe Dynamic
+dynamicApply = foldM dynApply
+
+-- Convert function from static to dynamic
+mkDyn :: (Typeable f) => f -> [Dynamic] -> Maybe Dynamic
+mkDyn = dynamicApply . toDyn
+
+-- Convert function from static to dynamic and allow only exactly N arguments
+mkDynN :: (Typeable f) => Int -> f -> [Dynamic] -> Maybe Dynamic
+mkDynN n f as | length as /= n = Nothing
+              | otherwise      = mkDyn f as
 
 -- Собирает две динамические функции в одну
 dplus :: DFunction -> DFunction -> DFunction

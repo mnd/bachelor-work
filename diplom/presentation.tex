@@ -23,6 +23,23 @@
   \frametitle{Динамическая диспетчеризация}
   \framesubtitle{}
   %% написать
+  \begin{block}{Определение}
+    Динамическая диспетчеризация --- это процесс выбора специфического
+    метода во время выполнения в зависимости от типов или значений
+    переданных данных.
+  \end{block}
+  \begin{block}{Пример}
+\begin{verbatim}
+(defgeneric collide (x y))
+
+(defmethod collide ((x asteroid) (y asteroid))
+;;астероид сталкивается с астероидом
+)
+(defmethod collide ((x spaceship) (y asteroid))
+;;космический корабль сталкивается с астероидом
+)
+\end{verbatim}
+  \end{block}
 \end{frame}
 
 %% VOICE: СОКРАТИТЬ РЕЧЬ В СИСТЕМАХ ТИПОВ
@@ -228,7 +245,7 @@ Double plus (Double a, Double b)
 
 %% VOICE: ГРОМКО ТОРЖЕСТВЕННО
 \begin{frame}[fragile]
-  \frametitle{Результаты моей работы}
+  \frametitle{Результаты работы}
   \framesubtitle{Описание системы}
   
   \begin{block}{Реализованные модули}
