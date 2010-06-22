@@ -24,9 +24,8 @@
   \framesubtitle{}
   %% написать
   \begin{block}{Определение}
-    Динамическая диспетчеризация --- это процесс выбора специфического
-    метода во время выполнения в зависимости от типов или значений
-    переданных данных.
+    Динамическая диспетчеризация --- выбор нужной ветви исполняемого
+    кода в зависимости от свойств переданных функции аргументов.
   \end{block}
   \begin{block}{Пример}
 \begin{verbatim}
@@ -58,7 +57,7 @@ filter :: (a -> Bool) -> [a] -> [a]
     %% будет обнаружена на этапе компиляции
 \begin{verbatim}
 square :: Integer -> Integer
-func = square "test"
+func = square "test" {- некорректный тип аргумента -}
 \end{verbatim}
   \end{block}
 
@@ -67,7 +66,8 @@ func = square "test"
     %% которых коснулось изменение
 \begin{verbatim}
 data Man = P Name Gender Age
-
+{- При изменении типа Man компилятор укажет
+   необходимость изменить код функций -}
 read :: String -> Man
 process :: Man -> Man
 \end{verbatim}
@@ -86,14 +86,6 @@ process :: Man -> Man
 \end{verbatim}
   \end{block}
 
-  \begin{block}{Уменьшение выразительности}
-    %% Невозможно выразить такое простое поведение как в классическом
-    %% примере на perl
-\begin{verbatim}
-open(F, "filename") or die("can't open");
-\end{verbatim}
-  \end{block}
-
   \begin{block}{Монолитность решений}
     %% При добавлении нового конструктора в data Expr придётся менять
     %% все функции обрабатывающие выражение непосредственно там где
@@ -105,6 +97,14 @@ inc :: Expr -> Expr
 inc (I a) = a + 1
 inc (D a) = a + 1.0
 inc (S a b) = S (inc a) (inc b)
+\end{verbatim}
+  \end{block}
+
+  \begin{block}{Уменьшение выразительности}
+    %% Невозможно выразить такое простое поведение как в классическом
+    %% примере на perl
+\begin{verbatim}
+if <always true test> then result else <error> -- type error
 \end{verbatim}
   \end{block}
 \end{frame}
@@ -145,7 +145,7 @@ $(sumN 3) 1 2 3 == 6
 \begin{verbatim}
 if isDataCorrect a
   then parse a
-  else error "incorrect input"
+  else error "bad data" -- compilable, but error in runtime
 \end{verbatim}
   \end{block}
 
@@ -155,7 +155,7 @@ unsafeCoerce :: a -> b
 
 cast :: (Typeable a, Typeable b) => a -> Maybe b
 cast x = r
-  where r = if typeOf x == typeOf (fromJust r)
+  where r = if typeOf x == typeOf (fromJust r) -- type test
               then Just $ unsafeCoerce x
               else Nothing
 \end{verbatim}
@@ -253,10 +253,21 @@ Double plus (Double a, Double b)
     \item Haskell библиотека, реализующая решение на Template Haskell
     \item Программа, генерирующая динамические функции и данные,
       необходимые для совместного использования динамических модулей.
-    \item Модуль языка Haskell, реализующий примитивы для использования
-      динамических функций и простейший цикл ввода-вывода данных.
+    \item Модуль языка Haskell, реализующий примитивы для совместного
+      использования динамических функций и простейший цикл
+      ввода-вывода данных.
     \item Программа для генерации главного модуля системы.
     \end{itemize}
   \end{block}
+\end{frame}
+
+\begin{frame}
+  \begin{beamercolorbox}[ht=2.5ex,dp=1ex,center,rounded=true,shadow=true]
+    {frametitle}
+    \usebeamerfont{frametitle}
+    Спасибо за внимание
+  \end{beamercolorbox}
+  %% \begin{block} {Спасибо за внимание!}
+  %% \end{block}
 \end{frame}
 \end{document}

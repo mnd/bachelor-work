@@ -29,12 +29,12 @@ sn = (space <|> newline <|> tab)
 -- world list with sn as delimeter
 wordList :: Parser [String]
 wordList = do{ s1 <- word
-          ; many sn
-          ; do { s2 <- wordList
-               ; return (s1:s2)
-               }
-            <|> return [s1]
-          }
+             ; many sn
+             ; do { s2 <- wordList
+                  ; return (s1:s2)
+                  }
+               <|> return [s1]
+             }
 
 -- read string before closing ". And we think that openinig " was early.
 quotedString :: Parser String
